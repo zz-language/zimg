@@ -46,14 +46,13 @@ unsafe fn last_error_msg() -> String {
 /// In the VM, `Value::Int(i)` is what `*mut void` maps to for opaque handles.
 macro_rules! as_handle {
     ($val:expr) => {{
-        match $val {
-            zz_runtime::Value::Int(i) => i as *mut std::ffi::c_void,
+        match &$val {
+            zz_runtime::Value::Int(i) => *i as *mut std::ffi::c_void,
             other => {
-                return Err(zz_runtime::EvalError::TypeError {
-                    expected: "int handle".to_string(),
-                    got: format!("{other:?}"),
-                    span: zz_runtime::Span::new(0, 0),
-                });
+                return Err(zz_runtime::EvalError::new(
+                    format!("expected int handle, got {other:?}"),
+                    zz_runtime::Span::new(0, 0),
+                ));
             }
         }
     }};
@@ -61,15 +60,14 @@ macro_rules! as_handle {
 
 macro_rules! as_float {
     ($val:expr) => {{
-        match $val {
-            zz_runtime::Value::Float(f) => f,
-            zz_runtime::Value::Int(i) => i as f64,
+        match &$val {
+            zz_runtime::Value::Float(f) => *f,
+            zz_runtime::Value::Int(i) => *i as f64,
             other => {
-                return Err(zz_runtime::EvalError::TypeError {
-                    expected: "float".to_string(),
-                    got: format!("{other:?}"),
-                    span: zz_runtime::Span::new(0, 0),
-                });
+                return Err(zz_runtime::EvalError::new(
+                    format!("expected float, got {other:?}"),
+                    zz_runtime::Span::new(0, 0),
+                ));
             }
         }
     }};
@@ -77,14 +75,13 @@ macro_rules! as_float {
 
 macro_rules! as_int {
     ($val:expr) => {{
-        match $val {
-            zz_runtime::Value::Int(i) => i,
+        match &$val {
+            zz_runtime::Value::Int(i) => *i,
             other => {
-                return Err(zz_runtime::EvalError::TypeError {
-                    expected: "int".to_string(),
-                    got: format!("{other:?}"),
-                    span: zz_runtime::Span::new(0, 0),
-                });
+                return Err(zz_runtime::EvalError::new(
+                    format!("expected int, got {other:?}"),
+                    zz_runtime::Span::new(0, 0),
+                ));
             }
         }
     }};
@@ -215,16 +212,18 @@ fn native_zimg_last_error(
 ) -> Result<zz_runtime::Value, zz_runtime::EvalError> {
     args.clear();
     let msg = unsafe { last_error_msg() };
-    Ok(zz_runtime::Value::Str(msg))
+    Ok(zz_runtime::Value::Str(Box::new(msg)))
 }
 
 // ---------------------------------------------------------------------------
 // Plugin registration entrypoint
 // ---------------------------------------------------------------------------
 
+#[allow(improper_ctypes_definitions)]
 type RegisterCallback = extern "C" fn(name: *const i8, arity: usize, f: zz_runtime::NativeFn);
 
 #[no_mangle]
+#[allow(improper_ctypes_definitions)]
 pub extern "C" fn zz_plugin_register(callback: RegisterCallback) {
     use std::ffi::CString;
 
