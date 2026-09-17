@@ -1,0 +1,83 @@
+// ffi.zz — Layer 0: extern "C" bindings to zimg_wrapper.
+//
+// Binds the C wrapper API, NOT libvips directly. The wrapper handles:
+//   - Double-pointer out-params (VipsImage **out) -> stored in C-side static
+//   - Non-scalar pointer inner types (*mut *mut void) -> hidden behind void*
+//   - Error reporting -> returns int status codes (0=ok, -1=error)
+//
+// ZZ never compares pointers. ZZ only compares int return codes to 0.
+// Image-producing ops store result in C static; call get_result() to retrieve.
+//
+// String params use *const void (maps to const void* in C; wrapper casts to char*).
+
+@link("zimg_wrapper")
+extern "C" {
+    // ── Init / shutdown ──────────────────────────────────────────────
+    // zimg_init: call once at startup, single-threaded. Returns 0 on success.
+    func zimg_init() -> int
+
+    // zimg_shutdown: call once at exit, frees vips internals.
+    func zimg_shutdown()
+
+    // zimg_set_concurrency: set libvips thread pool size. 0 = default.
+    func zimg_set_concurrency(n: int)
+
+    // ── Image-producing operations ───────────────────────────────────
+    // All return 0 on success, -1 on failure. After success, call
+    // zimg_get_result() to retrieve the new image handle.
+    // Input handle is borrowed (not consumed, not freed).
+
+    // zimg_load: load from file path.
+    func zimg_load(path: *const void) -> int
+
+    // zimg_resize: resize by scale factor (0.5 = half dimensions).
+    func zimg_resize(img: *mut void, scale: float) -> int
+
+    // zimg_blur: Gaussian blur. sigma = standard deviation.
+    func zimg_blur(img: *mut void, sigma: float) -> int
+
+    // zimg_crop: crop to rectangle at (left, top) with given dimensions.
+    func zimg_crop(img: *mut void, left: int, top: int, width: int, height: int) -> int
+
+    // zimg_rot: rotate by 90-degree increments.
+    // angle: 0=0, 1=90CW, 2=180, 3=270CW (90CCW)
+    func zimg_rot(img: *mut void, angle: int) -> int
+
+    // zimg_flip: flip horizontally or vertically.
+    // direction: 0=horizontal, 1=vertical
+    func zimg_flip(img: *mut void, direction: int) -> int
+
+    // ── Scalar accessors ─────────────────────────────────────────────
+    // Return dimension in pixels, or -1 on error (null handle).
+
+    func zimg_width(img: *mut void) -> int
+    func zimg_height(img: *mut void) -> int
+
+    // ── Disk writes ──────────────────────────────────────────────────
+    // All return 0 on success, -1 on failure. Input handle is borrowed.
+
+    // zimg_save: save with format auto-detected from extension.
+    func zimg_save(img: *mut void, path: *const void) -> int
+
+    // zimg_save_jpeg: save as JPEG. quality: 0-100.
+    func zimg_save_jpeg(img: *mut void, path: *const void, quality: int) -> int
+
+    // zimg_save_png: save as PNG. compression: 0-9.
+    func zimg_save_png(img: *mut void, path: *const void, compression: int) -> int
+
+    // zimg_save_webp: save as WebP. quality: 0-100.
+    func zimg_save_webp(img: *mut void, path: *const void, quality: int) -> int
+
+    // ── Lifecycle ────────────────────────────────────────────────────
+    // zimg_release: release an image handle. Safe to call with NULL.
+    func zimg_release(img: *mut void)
+
+    // ── Result accessors ─────────────────────────────────────────────
+    // zimg_get_result: return the result of the last image-producing call.
+    // Returns NULL if last operation failed. Transfers ownership to caller.
+    func zimg_get_result() -> *mut void
+
+    // ── Error handling ───────────────────────────────────────────────
+    // zimg_last_error: last error message. NOT thread-safe for reads.
+    func zimg_last_error() -> *const void
+}

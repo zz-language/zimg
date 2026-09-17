@@ -1,0 +1,67 @@
+// image.zz — Layer 1: Safe VipsImage wrapper.
+//
+// Wraps an opaque C handle (zimg_image*) with lifecycle management.
+// The handle is a *mut void — ZZ never compares it to null.
+// All error checking is done via int status codes from the C wrapper.
+// Debug mode tracks live handle count via shared counter (util.zz).
+
+import ffi
+import util
+import error
+
+pub struct VipsImage {
+    handle: *mut void
+}
+
+impl VipsImage {
+    // Load an image from a file path.
+    // Returns Err if file doesn't exist or format is unsupported.
+    pub func from_file(path: str) -> Result<VipsImage, str> {
+        code := ffi.zimg_load(path.c_str())
+        if code != 0 {
+            return .err(error.capture_error())
+        }
+        handle := ffi.zimg_get_result()
+        util.handle_counter_incr()
+        .ok(VipsImage{handle: handle})
+    }
+
+    // Release the image, decrementing its refcount.
+    // Safe to call multiple times (second call is a no-op at C level).
+    pub func release(self: VipsImage) {
+        ffi.zimg_release(self.handle)
+        util.handle_counter_decr()
+    }
+
+    // Get image width in pixels.
+    pub func width(self: VipsImage) -> int {
+        ffi.zimg_width(self.handle)
+    }
+
+    // Get image height in pixels.
+    pub func height(self: VipsImage) -> int {
+        ffi.zimg_height(self.handle)
+    }
+
+    // Resize by scale factor (0.5 = half dimensions).
+    // Returns a new VipsImage (caller owns the reference).
+    pub func resize_by_scale(self: VipsImage, scale: float) -> Result<VipsImage, str> {
+        code := ffi.zimg_resize(self.handle, scale)
+        if code != 0 {
+            return .err(error.capture_error())
+        }
+        new_handle := ffi.zimg_get_result()
+        util.handle_counter_incr()
+        .ok(VipsImage{handle: new_handle})
+    }
+
+    // Save image to a file path.
+    // Format is auto-detected from file extension.
+    pub func save(self: VipsImage, path: str) -> Result<(), str> {
+        code := ffi.zimg_save(self.handle, path.c_str())
+        if code != 0 {
+            return .err(error.capture_error())
+        }
+        .ok(())
+    }
+}

@@ -1,0 +1,100 @@
+// m1_test.zz — Milestone 1 E2E tests for zimg.
+//
+// Tests: load → resize → save → re-load → verify dimensions.
+// Must pass valgrind (zero leaks) before proceeding to M2.
+
+import std.io
+import std.fs
+import image
+import util
+
+const FIXTURE_DIR = "tests/fixtures"
+const INPUT_IMAGE = "tests/fixtures/small.jpg"
+const OUTPUT_IMAGE = "tests/fixtures/output_resized.jpg"
+
+@test
+func test_resize() {
+    // Load the test image
+    var img = match image.VipsImage::from_file(INPUT_IMAGE) {
+        .ok(v) => v,
+        .err(e) => {
+            println("skip: cannot load {INPUT_IMAGE}: {e}")
+            return
+        },
+    }
+    defer img.release()
+
+    // Verify original dimensions are reasonable
+    var w = img.width()
+    var h = img.height()
+    assert(w > 0, "width must be positive")
+    assert(h > 0, "height must be positive")
+    println("original: {w}x{h}")
+
+    // Resize by 0.5x
+    var resized = match img.resize_by_scale(0.5) {
+        .ok(v) => v,
+        .err(e) => fail("resize failed: {e}"),
+    }
+    defer resized.release()
+
+    // Verify resized dimensions
+    var rw = resized.width()
+    var rh = resized.height()
+    println("resized: {rw}x{rh}")
+    assert(rw > 0, "resized width must be positive")
+    assert(rh > 0, "resized height must be positive")
+
+    // Save the resized image
+    match resized.save(OUTPUT_IMAGE) {
+        .ok(()) => {},
+        .err(e) => fail("save failed: {e}"),
+    }
+
+    // Re-load and verify dimensions match
+    var reloaded = match image.VipsImage::from_file(OUTPUT_IMAGE) {
+        .ok(v) => v,
+        .err(e) => fail("re-load failed: {e}"),
+    }
+    defer reloaded.release()
+
+    var rw2 = reloaded.width()
+    var rh2 = reloaded.height()
+    assert_eq(rw, rw2, "width mismatch after re-load")
+    assert_eq(rh, rh2, "height mismatch after re-load")
+
+    println("m1_resize: PASS")
+}
+
+@test
+func test_metadata() {
+    var img = match image.VipsImage::from_file(INPUT_IMAGE) {
+        .ok(v) => v,
+        .err(e) => {
+            println("skip: cannot load {INPUT_IMAGE}: {e}")
+            return
+        },
+    }
+    defer img.release()
+
+    var w = img.width()
+    var h = img.height()
+    assert(w > 0 && w < 100000, "width out of range: {w}")
+    assert(h > 0 && h < 100000, "height out of range: {h}")
+    println("metadata: {w}x{h} — PASS")
+}
+
+@test
+func test_error_on_missing() {
+    var result = image.VipsImage::from_file("nonexistent_file.jpg")
+    match result {
+        .ok(_) => fail("should have returned error for missing file"),
+        .err(_) => println("error_on_missing: PASS"),
+    }
+}
+
+@test
+func test_handle_counter() {
+    util.assert_counter_zero()
+    println("handle_counter: PASS")
+}

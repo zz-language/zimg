@@ -1,0 +1,27 @@
+// util.zz — Shared handle counter for leak detection.
+//
+// Both image.zz (VipsImage lifecycle) and ops.zz (ImageBuilder current pointer
+// swaps) route through this counter. At process exit, assert_counter_zero()
+// catches any leaks — the "assert zero live handles" safety net.
+
+// Live handle count. Debug builds only.
+live_handles: int = 0
+
+pub func handle_counter_incr() {
+    live_handles = live_handles + 1
+}
+
+pub func handle_counter_decr() {
+    live_handles = live_handles - 1
+}
+
+pub func handle_counter_value() -> int {
+    live_handles
+}
+
+pub func assert_counter_zero() {
+    if live_handles != 0 {
+        println("LEAK: {live_handles} VipsImage handles still live at shutdown")
+        fail("handle leak detected")
+    }
+}
