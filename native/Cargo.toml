@@ -1,0 +1,14 @@
+[package]
+name = "zimg_native"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+zz_runtime = { path = "/home/zaid/Projects/zz_lang/crates/zz_runtime" }
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"

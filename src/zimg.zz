@@ -1,0 +1,66 @@
+// zimg image processing — handle-based operations (MVP)
+//
+// Note: String-based operations (load, save) are deferred to a follow-up.
+// This module provides int-handle based operations only.
+
+import zimg
+
+// Opaque handle to a vips image.
+struct Image {
+    handle: int
+}
+
+// Initialize the zimg library. Returns 0 on success.
+func init() -> int {
+    return zimg.zimg_init()
+}
+
+// Get the width of an image in pixels.
+func width(img: Image) -> int {
+    return zimg.zimg_width(img.handle)
+}
+
+// Get the height of an image in pixels.
+func height(img: Image) -> int {
+    return zimg.zimg_height(img.handle)
+}
+
+// Resize an image by a scale factor. Returns 0 on success.
+func resize(img: Image, scale: float) -> int {
+    return zimg.zimg_resize(img.handle, scale)
+}
+
+// Apply Gaussian blur with the given sigma. Returns 0 on success.
+func blur(img: Image, sigma: float) -> int {
+    return zimg.zimg_blur(img.handle, sigma)
+}
+
+// Crop an image to the given rectangle. Returns 0 on success.
+func crop(img: Image, left: int, top: int, width: int, height: int) -> int {
+    return zimg.zimg_crop(img.handle, left, top, width, height)
+}
+
+// Rotate an image by 0/90/180/270 degrees. Returns 0 on success.
+func rot(img: Image, angle: int) -> int {
+    return zimg.zimg_rot(img.handle, angle)
+}
+
+// Flip an image (0=horizontal, 1=vertical). Returns 0 on success.
+func flip(img: Image, direction: int) -> int {
+    return zimg.zimg_flip(img.handle, direction)
+}
+
+// Release an image handle.
+func release(img: Image) {
+    zimg.zimg_release(img.handle)
+}
+
+// Get the last operation's result handle.
+func get_result() -> int {
+    return zimg.zimg_get_result()
+}
+
+// Get the last error message as a string.
+func last_error() -> str {
+    return zimg.zimg_last_error()
+}

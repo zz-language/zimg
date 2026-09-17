@@ -1,0 +1,17 @@
+// Version: 1
+// Rustc: 1.85.0
+// Plugin-version: 0.1.0
+
+extern "C" {
+    func zimg_init() -> int
+    func zimg_width(img: *mut void) -> int
+    func zimg_height(img: *mut void) -> int
+    func zimg_resize(img: *mut void, scale: float) -> int
+    func zimg_blur(img: *mut void, sigma: float) -> int
+    func zimg_crop(img: *mut void, left: int, top: int, width: int, height: int) -> int
+    func zimg_rot(img: *mut void, angle: int) -> int
+    func zimg_flip(img: *mut void, direction: int) -> int
+    func zimg_release(img: *mut void)
+    func zimg_get_result() -> *mut void
+    func zimg_last_error() -> *const void
+}

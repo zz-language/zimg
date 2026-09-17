@@ -1,3 +1,6 @@
 [package]
 name = "zimg"
 version = "0.1.0"
+
+[native]
+build = "build.sh"
