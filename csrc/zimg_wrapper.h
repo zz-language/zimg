@@ -19,6 +19,11 @@
  *     and must call zimg_release() when done.
  *   - On failure: status is -1, error via zimg_last_error(). The internal
  *     result is set to NULL — safe to ignore.
+ *   - Debug builds (NDEBUG undefined) abort with "result slot overwritten
+ *     before consumption" if a producing call runs while a previous
+ *     result is still unconsumed. Recommended pattern for all native
+ *     libraries using the single-slot idiom. Define NDEBUG (or
+ *     ZIMG_NO_SLOT_CHECK) for production.
  *
  * Threading: single-threaded only (global error buffer + result slot).
  */
@@ -48,6 +53,9 @@ void zimg_set_concurrency(int n);
 
 /* Load from file path. */
 int zimg_load(const char* path);
+
+/* Create a solid-color test image (no file I/O). */
+int zimg_create_test(int width, int height, int r, int g, int b);
 
 /* Resize by scale factor (0.5 = half). */
 int zimg_resize(void* img, double scale);
@@ -91,6 +99,10 @@ int zimg_save_webp(void* img, const char* path, int quality);
 
 /* Release an image handle. Safe to call with NULL (no-op). */
 void zimg_release(void* img);
+
+/* Debug live-handle counter: produced images minus releases. Tests
+ * assert zero at exit. Always compiled in. */
+int zimg_live_handles(void);
 
 /* ── Result accessors ─────────────────────────────────────────────── */
 

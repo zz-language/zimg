@@ -1,0 +1,88 @@
+// ops.zz — Pillow-style one-shot operations.
+//
+// Each op hides the full lifecycle: load → transform → save back to the
+// same path (mogrify semantics) → close. Nothing raw leaks out.
+
+import image
+
+/// Scale factor fitting (cur_w, cur_h) inside (want_w, want_h),
+/// aspect preserved.
+func fit_scale(cur_w: int, cur_h: int, want_w: int, want_h: int) -> float {
+    sx := float(want_w) / float(cur_w)
+    sy := float(want_h) / float(cur_h)
+    s := sx
+    if sy < sx {
+        s = sy
+    }
+    s
+}
+
+func angle_of(degrees: int) -> Result<int, str> {
+    match degrees {
+        90 => .ok(1),
+        180 => .ok(2),
+        270 => .ok(3),
+        _ => .err("zimg.rotate supports 90, 180 or 270 degrees"),
+    }
+}
+
+func resized(handle: int, scale: float, path: str) -> Result<str, str> {
+    match image.resize_to(handle, scale) {
+        .err(e) => .err(e),
+        .ok(h2) => saved(h2, path),
+    }
+}
+
+func rotated(handle: int, angle: int, path: str) -> Result<str, str> {
+    match image.rotate_by(handle, angle) {
+        .err(e) => .err(e),
+        .ok(h2) => saved(h2, path),
+    }
+}
+
+func blurred(handle: int, sigma: float, path: str) -> Result<str, str> {
+    match image.blur_by(handle, sigma) {
+        .err(e) => .err(e),
+        .ok(h2) => saved(h2, path),
+    }
+}
+
+func saved(h2: int, path: str) -> Result<str, str> {
+    match image.save_to(h2, path) {
+        .err(e) => .err(e),
+        .ok(out) => {
+            image.close(h2)
+            .ok(out)
+        },
+    }
+}
+
+/// Resize the image at `path`, saving back to the same path.
+/// Returns the path on success.
+pub func resize(path: str, width: int, height: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => resized(h, fit_scale(image.width_of(h), image.height_of(h), width, height), path),
+    }
+}
+
+/// Rotate the image at `path` clockwise, saving back to the same path.
+/// Returns the path on success.
+pub func rotate(path: str, degrees: int) -> Result<str, str> {
+    match angle_of(degrees) {
+        .err(e) => .err(e),
+        .ok(angle) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(h) => rotated(h, angle, path),
+        },
+    }
+}
+
+/// Gaussian-blur the image at `path`, saving back to the same path.
+/// Returns the path on success.
+pub func blur(path: str, sigma: float) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => blurred(h, sigma, path),
+    }
+}

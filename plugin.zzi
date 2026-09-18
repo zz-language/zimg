@@ -2,16 +2,27 @@
 // Rustc: 1.85.0
 // Plugin-version: 0.1.0
 
+// Raw FFI layer (internal). Consumers use the ergonomic `zimg.*` API
+// from src/zimg.zz instead: `import zimg` then `zimg.resize(...)`.
+//
+// Raw names are flat and equal their C symbols. ZZ free-function calls
+// only resolve one- and two-part paths, so a deeper `zimg.raw.*`
+// namespace cannot work for free functions (three-part paths are
+// method calls). Treat `zimg_*` as private implementation: the
+// supported surface is `zimg.*` only.
 extern "C" {
     func zimg_init() -> int
-    func zimg_width(img: *mut void) -> int
-    func zimg_height(img: *mut void) -> int
-    func zimg_resize(img: *mut void, scale: float) -> int
-    func zimg_blur(img: *mut void, sigma: float) -> int
-    func zimg_crop(img: *mut void, left: int, top: int, width: int, height: int) -> int
-    func zimg_rot(img: *mut void, angle: int) -> int
-    func zimg_flip(img: *mut void, direction: int) -> int
-    func zimg_release(img: *mut void)
-    func zimg_get_result() -> *mut void
-    func zimg_last_error() -> *const void
+    func zimg_load(path: str) -> int
+    func zimg_create_test(width: int, height: int, r: int, g: int, b: int) -> int
+    func zimg_width(img: int) -> int
+    func zimg_height(img: int) -> int
+    func zimg_resize(img: int, scale: float) -> int
+    func zimg_blur(img: int, sigma: float) -> int
+    func zimg_crop(img: int, left: int, top: int, width: int, height: int) -> int
+    func zimg_rot(img: int, angle: int) -> int
+    func zimg_flip(img: int, direction: int) -> int
+    func zimg_save(img: int, path: str) -> int
+    func zimg_release(img: int)
+    func zimg_get_result() -> int
+    func zimg_live_handles() -> int
 }

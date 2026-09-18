@@ -1,67 +1,116 @@
-// image.zz — Layer 1: Safe VipsImage wrapper.
+// image.zz — single-owner handle pipeline over the raw layer.
 //
-// Wraps an opaque C handle (zimg_image*) with lifecycle management.
-// The handle is a *mut void — ZZ never compares it to null.
-// All error checking is done via int status codes from the C wrapper.
-// Debug mode tracks live handle count via shared counter (util.zz).
+// Why ints, not a struct: ZZ structs cannot cross into zz_value slots on
+// the AOT path yet (pre-existing codegen gap), so the builder is a
+// discipline, not a type: every transform takes an owned handle, releases
+// it, and returns the fresh one. Never reuse a handle after passing it to
+// a transform — use the returned one (move semantics by convention;
+// stale ints dangle).
+//
+//   - `close()` releases a handle. Pair every chain with a close.
+//   - `live_handles()` reports produced-minus-released process-wide;
+//     tests assert zero at exit.
+//   - Failures never touch the slot: the input handle stays valid.
+//
+// Init is automatic: the first load/create initializes libvips
+// (vips_init is idempotent, and the slot is empty at that point by
+// construction, so init can orphan nothing).
+//
+// Error model: every fallible op returns Result<_, str> with a static
+// message (C detail strings cannot cross the boundary yet).
 
-import ffi
-import util
-import error
-
-pub struct VipsImage {
-    handle: *mut void
+/// Debug live-handle counter (produced minus released). Zero at exit.
+pub func live_handles() -> int {
+    zimg_live_handles()
 }
 
-impl VipsImage {
-    // Load an image from a file path.
-    // Returns Err if file doesn't exist or format is unsupported.
-    pub func from_file(path: str) -> Result<VipsImage, str> {
-        code := ffi.zimg_load(path.c_str())
-        if code != 0 {
-            return .err(error.capture_error())
-        }
-        handle := ffi.zimg_get_result()
-        util.handle_counter_incr()
-        .ok(VipsImage{handle: handle})
+func ensure_init() -> Result<int, str> {
+    code := zimg_init()
+    if code != 0 {
+        return .err("zimg.init failed")
     }
+    .ok(code)
+}
 
-    // Release the image, decrementing its refcount.
-    // Safe to call multiple times (second call is a no-op at C level).
-    pub func release(self: VipsImage) {
-        ffi.zimg_release(self.handle)
-        util.handle_counter_decr()
+/// Load an image file. Returns an owned handle.
+pub func load(path: str) -> Result<int, str> {
+    match ensure_init() {
+        .err(e) => .err(e),
+        .ok(_c) => match checked("zimg.load", zimg_load(path)) {
+            .err(e) => .err(e),
+            .ok(_c2) => .ok(zimg_get_result()),
+        },
     }
+}
 
-    // Get image width in pixels.
-    pub func width(self: VipsImage) -> int {
-        ffi.zimg_width(self.handle)
+/// Solid-color test image (no file I/O). Useful for tests.
+pub func create_test(width: int, height: int, r: int, g: int, b: int) -> Result<int, str> {
+    match ensure_init() {
+        .err(e) => .err(e),
+        .ok(_c) => match checked("zimg.create_test", zimg_create_test(width, height, r, g, b)) {
+            .err(e) => .err(e),
+            .ok(_c2) => .ok(zimg_get_result()),
+        },
     }
+}
 
-    // Get image height in pixels.
-    pub func height(self: VipsImage) -> int {
-        ffi.zimg_height(self.handle)
+func checked(op: str, code: int) -> Result<int, str> {
+    match code {
+        0 => .ok(code),
+        _ => .err("{op} failed"),
     }
+}
 
-    // Resize by scale factor (0.5 = half dimensions).
-    // Returns a new VipsImage (caller owns the reference).
-    pub func resize_by_scale(self: VipsImage, scale: float) -> Result<VipsImage, str> {
-        code := ffi.zimg_resize(self.handle, scale)
-        if code != 0 {
-            return .err(error.capture_error())
-        }
-        new_handle := ffi.zimg_get_result()
-        util.handle_counter_incr()
-        .ok(VipsImage{handle: new_handle})
-    }
+pub func width_of(handle: int) -> int {
+    zimg_width(handle)
+}
 
-    // Save image to a file path.
-    // Format is auto-detected from file extension.
-    pub func save(self: VipsImage, path: str) -> Result<(), str> {
-        code := ffi.zimg_save(self.handle, path.c_str())
-        if code != 0 {
-            return .err(error.capture_error())
-        }
-        .ok(())
+pub func height_of(handle: int) -> int {
+    zimg_height(handle)
+}
+
+/// Shared replace step: on success, consume the previous handle and
+/// return the fresh one. On failure the input handle stays valid.
+func replace(op: str, handle: int, code: int) -> Result<int, str> {
+    match checked(op, code) {
+        .err(e) => .err(e),
+        .ok(_c) => {
+            next := zimg_get_result()
+            zimg_release(handle)
+            .ok(next)
+        },
     }
+}
+
+pub func resize_to(handle: int, scale: float) -> Result<int, str> {
+    replace("zimg.resize", handle, zimg_resize(handle, scale))
+}
+
+pub func blur_by(handle: int, sigma: float) -> Result<int, str> {
+    replace("zimg.blur", handle, zimg_blur(handle, sigma))
+}
+
+pub func rotate_by(handle: int, angle: int) -> Result<int, str> {
+    replace("zimg.rotate", handle, zimg_rot(handle, angle))
+}
+
+pub func flip_by(handle: int, direction: int) -> Result<int, str> {
+    replace("zimg.flip", handle, zimg_flip(handle, direction))
+}
+
+pub func crop_to(handle: int, left: int, top: int, width: int, height: int) -> Result<int, str> {
+    replace("zimg.crop", handle, zimg_crop(handle, left, top, width, height))
+}
+
+/// Save to path. Returns the path on success. Does not consume.
+pub func save_to(handle: int, path: str) -> Result<str, str> {
+    match checked("zimg.save", zimg_save(handle, path)) {
+        .err(e) => .err(e),
+        .ok(_c) => .ok(path),
+    }
+}
+
+/// Release a handle. After close the value must not be used.
+pub func close(handle: int) {
+    zimg_release(handle)
 }

@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-zz_runtime = { path = "/home/zaid/Projects/zz_lang/crates/zz_runtime" }
+zz_runtime = { git = "https://github.com/zaidejjo/zz", tag = "tutorial/fnv-pin" }
 
 [build-dependencies]
 cc = "1"

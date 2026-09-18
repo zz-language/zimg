@@ -1123,6 +1123,7 @@ checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
 [[package]]
 name = "zz_checker"
 version = "0.1.0"
+source = "git+https://github.com/zaidejjo/zz?tag=tutorial%2Ffnv-pin#1db19f04ed286c7294d5e8cd28ab271d8d1b5e2a"
 dependencies = [
  "zz_frontend",
 ]
@@ -1130,6 +1131,7 @@ dependencies = [
 [[package]]
 name = "zz_frontend"
 version = "0.1.0"
+source = "git+https://github.com/zaidejjo/zz?tag=tutorial%2Ffnv-pin#1db19f04ed286c7294d5e8cd28ab271d8d1b5e2a"
 dependencies = [
  "codespan-reporting",
  "colored",
@@ -1139,6 +1141,7 @@ dependencies = [
 [[package]]
 name = "zz_native_rt"
 version = "0.1.0"
+source = "git+https://github.com/zaidejjo/zz?tag=tutorial%2Ffnv-pin#1db19f04ed286c7294d5e8cd28ab271d8d1b5e2a"
 dependencies = [
  "argon2",
  "bcrypt",
@@ -1158,6 +1161,7 @@ dependencies = [
 [[package]]
 name = "zz_runtime"
 version = "0.1.0"
+source = "git+https://github.com/zaidejjo/zz?tag=tutorial%2Ffnv-pin#1db19f04ed286c7294d5e8cd28ab271d8d1b5e2a"
 dependencies = [
  "codespan-reporting",
  "zz_checker",
