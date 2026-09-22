@@ -184,6 +184,77 @@ pub func watermark(path: str, mark_path: str, mode: str, x: int, y: int) -> Resu
     }
 }
 
+/// Dimensions of the image at `path` as [width, height].
+/// Loads, reads, closes — no file is modified.
+pub func dims(path: str) -> Result<[int], str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => {
+            d := [image.width_of(h), image.height_of(h)]
+            image.close(h)
+            .ok(d)
+        },
+    }
+}
+
+/// Flip the image at `path` ("horizontal" or "vertical"), saving back.
+pub func flip(path: str, direction: str) -> Result<str, str> {
+    match image.flip_named(direction) {
+        .err(e) => .err(e),
+        .ok(dir) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(h) => match image.flip_to(h, dir) {
+                .err(e) => .err(e),
+                .ok(h2) => saved(h2, path),
+            },
+        },
+    }
+}
+
+/// Crop the image at `path` to (left, top, width, height), saving back.
+pub func crop(path: str, left: int, top: int, width: int, height: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.crop_to(h, left, top, width, height) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Convert the image at `path` to a named colorspace
+/// ("bw", "cmyk", "srgb", "grey16"), saving back.
+pub func to_colorspace(path: str, name: str) -> Result<str, str> {
+    match image.colorspace_named(name) {
+        .err(e) => .err(e),
+        .ok(cs) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(h) => match image.to_colorspace(h, cs) {
+                .err(e) => .err(e),
+                .ok(h2) => saved(h2, path),
+            },
+        },
+    }
+}
+
+/// Resize with an explicit resampling kernel
+/// ("nearest", "linear", "cubic", "mitchell", "lanczos2", "lanczos3").
+pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Result<str, str> {
+    match image.kernel_named(kernel) {
+        .err(e) => .err(e),
+        .ok(k) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(h) => match image.resize_kernel_to(
+                h,
+                fit_scale(image.width_of(h), image.height_of(h), width, height),
+                k
+            ) {
+                .err(e) => .err(e),
+                .ok(h2) => saved(h2, path),
+            },
+        },
+    }
+}
 /// Save a copy in another format with a quality setting.
 pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
     match image.load(path) {

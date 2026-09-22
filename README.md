@@ -42,6 +42,40 @@ n := match zimg.blur("a.png", 5.0) {
 `zimg.live_handles()` reports produced-minus-released handles
 process-wide; assert zero in tests.
 
+## Tests
+
+```bash
+cd tests/e2e
+./run_tests.sh   # install + every check file on VM (zz run) and AOT (zz build)
+```
+
+17 checks in `src/m1_test.zz` (round-trip, metadata, missing-file) and
+`src/ops_test.zz` (all 13 one-shots, angle/name rejections, format
+saves, watermark incl. missing-mark). Each check asserts
+`live_handles() == 0`; the harness requires `ALL_PASS` on both engines.
+
+ASan re-verification (no valgrind on this box): build any check file
+with `ZZ_DUMP_C`, relink the dump with the cached `libzz_rt.a` +
+`build/*.o|a` + `pkg-config --libs vips` under `-fsanitize=address`.
+Result: zero ASan errors; LSan reports ~6MB in 95×64KB blocks — the
+zz host arenas (`zz_arena_init(_, 65536)` per function, never freed at
+exit; a hello-world binary leaks 2 the same way). Zero leaked
+`VipsImage`s per the live-handle gate.
+
+## Known toolchain gaps (upstream zz, not zimg bugs)
+
+- `zz test` type-checks plugin imports but never dlopens `build/*.so`,
+  so native calls fail at runtime — the suite uses `zz run` programs
+  instead of `@test` functions until that lands.
+- VM frame-slot bug (`runtime.rs:488` OOB / corrupt locals): several
+  live `[int]` locals beside `match` statements, `assert(a && b)`, or
+  two-subscript call args can panic. Workaround used throughout the
+  suite: `dim_w`/`dim_h` int helpers, one comparison per `assert`,
+  calls extracted to locals before asserting.
+- Relative `[dependencies.zimg] path = "../.."` breaks the AOT
+  build-hook (`../../build.sh` not found); `tests/e2e/zz.toml` uses an
+  absolute path until hook resolution is fixed upstream.
+
 ## Pillow side-by-side
 
 | Pillow | zimg |

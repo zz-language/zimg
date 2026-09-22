@@ -58,6 +58,26 @@ pub func save_webp(path: str, out: str, quality: int) -> Result<str, str> {
     ops.save_webp(path, out, quality)
 }
 
+pub func dims(path: str) -> Result<[int], str> {
+    ops.dims(path)
+}
+
+pub func flip(path: str, direction: str) -> Result<str, str> {
+    ops.flip(path, direction)
+}
+
+pub func crop(path: str, left: int, top: int, width: int, height: int) -> Result<str, str> {
+    ops.crop(path, left, top, width, height)
+}
+
+pub func to_colorspace(path: str, name: str) -> Result<str, str> {
+    ops.to_colorspace(path, name)
+}
+
+pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Result<str, str> {
+    ops.resize_kernel(path, width, height, kernel)
+}
+
 /// Debug live-handle counter (produced minus released). Zero at exit.
 pub func live_handles() -> int {
     image.live_handles()

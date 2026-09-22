@@ -2,3 +2,8 @@ native/target/
 build/
 
 .opencode/mynotes/
+
+# e2e consumer harness artifacts (recreated by run_tests.sh)
+tests/e2e/vendor/
+tests/e2e/src/bin/
+tests/e2e/zz.lock

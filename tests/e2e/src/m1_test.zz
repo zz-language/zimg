@@ -1,0 +1,97 @@
+// m1_test.zz — load → dims → resize → save → reload round-trip.
+//
+// Run via ../run_tests.sh (zz run + zz build, both engines).
+//
+// NOTE: checks keep zero array locals (dim_w/dim_h helpers) — a zz VM
+// frame-slot bug panics on several live [int] locals beside match
+// statements (see README "Known toolchain gaps").
+import std.fs
+import zimg
+
+const FIXTURE = "../fixtures/small.jpg"
+const WORK = "/tmp/zimg-e2e-work.jpg"
+const OUT = "/tmp/zimg-e2e-resized.jpg"
+
+func fresh_copy() {
+    match fs.copy(FIXTURE, WORK) {
+        .ok(_v) => println("fixture ready"),
+        .err(e) => fail("fixture copy: {e}"),
+    }
+}
+
+func dims_of(path: str) -> [int] {
+    match zimg.dims(path) {
+        .ok(d) => d,
+        .err(e) => {
+            fail("dims {path}: {e}")
+            [0, 0]
+        },
+    }
+}
+
+func dim_w(path: str) -> int {
+    d := dims_of(path)
+    d[0]
+}
+
+func dim_h(path: str) -> int {
+    d := dims_of(path)
+    d[1]
+}
+
+func check_resize_roundtrip() {
+    fresh_copy()
+    w0 := dim_w(WORK)
+    h0 := dim_h(WORK)
+    assert(w0 > 0)
+    assert(h0 > 0)
+    println("original: {w0}x{h0}")
+
+    match zimg.resize(WORK, 64, 64) {
+        .ok(p) => println("resized {p}"),
+        .err(e) => fail("resize: {e}"),
+    }
+    w1 := dim_w(WORK)
+    h1 := dim_h(WORK)
+    assert(w1 <= 64)
+    assert(h1 <= 64)
+    assert(w1 > 0)
+    assert(h1 > 0)
+    println("resized: {w1}x{h1}")
+
+    match zimg.save_jpeg(WORK, OUT, 85) {
+        .ok(p) => println("saved {p}"),
+        .err(e) => fail("save_jpeg: {e}"),
+    }
+    assert_eq(dim_w(OUT), w1)
+    assert_eq(dim_h(OUT), h1)
+    assert_eq(zimg.live_handles(), 0)
+    println("m1_resize: PASS")
+}
+
+func check_metadata() {
+    w := dim_w(FIXTURE)
+    h := dim_h(FIXTURE)
+    assert(w > 0)
+    assert(w < 100000)
+    assert(h > 0)
+    assert(h < 100000)
+    assert_eq(zimg.live_handles(), 0)
+    println("metadata: {w}x{h} — PASS")
+}
+
+func check_error_on_missing() {
+    match zimg.dims("nonexistent_file.jpg") {
+        .ok(_) => fail("should have returned error for missing file"),
+        .err(_e) => println("error_on_missing: PASS"),
+    }
+    assert_eq(zimg.live_handles(), 0)
+}
+
+func main() {
+    check_resize_roundtrip()
+    check_metadata()
+    check_error_on_missing()
+    assert_eq(zimg.live_handles(), 0)
+    println("ALL_PASS")
+}

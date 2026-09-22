@@ -106,6 +106,19 @@ pub func flip_by(handle: int, direction: int) -> Result<int, str> {
     replace("zimg.flip", handle, zimg_flip(handle, direction))
 }
 
+/// Flip directions ("horizontal" mirrors left-right, "vertical" top-bottom).
+pub func flip_named(name: str) -> Result<int, str> {
+    match name {
+        "horizontal" => .ok(0),
+        "vertical" => .ok(1),
+        _ => .err("unknown flip direction"),
+    }
+}
+
+pub func flip_to(handle: int, direction: int) -> Result<int, str> {
+    replace("zimg.flip", handle, zimg_flip(handle, direction))
+}
+
 pub func crop_to(handle: int, left: int, top: int, width: int, height: int) -> Result<int, str> {
     replace("zimg.crop", handle, zimg_crop(handle, left, top, width, height))
 }
