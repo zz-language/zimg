@@ -1,5 +1,5 @@
 // Version: 1
-// Rustc: 1.85.0
+// Rustc: 1.97.1
 // Plugin-version: 0.1.0
 
 // Raw FFI layer (internal). Consumers use the ergonomic `zimg.*` API
@@ -21,6 +21,18 @@ extern "C" {
     func zimg_crop(img: int, left: int, top: int, width: int, height: int) -> int
     func zimg_rot(img: int, angle: int) -> int
     func zimg_flip(img: int, direction: int) -> int
+    func zimg_resize_kernel(img: int, scale: float, kernel: int) -> int
+    func zimg_thumbnail(img: int, width: int, height: int, crop: int) -> int
+    func zimg_rotate_free(img: int, angle: float, r: int, g: int, b: int, has_bg: int) -> int
+    func zimg_grayscale(img: int) -> int
+    func zimg_brightness_contrast(img: int, brightness: float, contrast: float) -> int
+    func zimg_to_colorspace(img: int, cs: int) -> int
+    func zimg_sharpen(img: int, sigma: float) -> int
+    func zimg_composite(base: int, overlay: int, mode: int, x: int, y: int) -> int
+    func zimg_save_jpeg(img: int, path: str, quality: int) -> int
+    func zimg_save_png(img: int, path: str, compression: int) -> int
+    func zimg_save_webp(img: int, path: str, quality: int) -> int
+    func zimg_set_concurrency(n: int)
     func zimg_save(img: int, path: str) -> int
     func zimg_release(img: int)
     func zimg_get_result() -> int

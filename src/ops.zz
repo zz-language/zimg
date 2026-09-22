@@ -86,3 +86,149 @@ pub func blur(path: str, sigma: float) -> Result<str, str> {
         .ok(h) => blurred(h, sigma, path),
     }
 }
+
+/// Thumbnail the image at `path` to fit inside (width, height), saving
+/// back. crop_mode: "none" fits, "centre" fills exactly.
+pub func thumbnail(path: str, width: int, height: int, crop_mode: str) -> Result<str, str> {
+    match image.crop_mode_named(crop_mode) {
+        .err(e) => .err(e),
+        .ok(cm) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(h) => match image.thumbnail_to(h, width, height, cm) {
+                .err(e) => .err(e),
+                .ok(h2) => saved(h2, path),
+            },
+        },
+    }
+}
+
+/// Free-rotate the image at `path` by any angle (degrees, clockwise),
+/// saving back. Background is transparent when the image has alpha,
+/// else black.
+pub func rotate_free(path: str, angle: float) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.rotate_free_to(h, angle) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Free-rotate with explicit rgb background fill.
+pub func rotate_bg(path: str, angle: float, r: int, g: int, b: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.rotate_bg_to(h, angle, r, g, b) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Grayscale the image at `path`, saving back.
+pub func grayscale(path: str) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.grayscale(h) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Adjust brightness (levels, e.g. +10) and contrast (1.0 neutral).
+pub func bright_contrast(path: str, brightness: float, contrast: float) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.bright_contrast(h, brightness, contrast) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Sharpen the image at `path` (sigma), saving back.
+pub func sharpen(path: str, sigma: float) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.sharpen_by(h, sigma) {
+            .err(e) => .err(e),
+            .ok(h2) => saved(h2, path),
+        },
+    }
+}
+
+/// Overlay `mark_path` onto the image at `path` at (x, y) with blend
+/// mode ("over" default), saving back to `path`.
+pub func watermark(path: str, mark_path: str, mode: str, x: int, y: int) -> Result<str, str> {
+    match image.blend_named(mode) {
+        .err(e) => .err(e),
+        .ok(m) => match image.load(path) {
+            .err(e) => .err(e),
+            .ok(base) => match image.load(mark_path) {
+                .err(e) => {
+                    image.close(base)
+                    .err(e)
+                },
+                .ok(mark) => match image.composite_onto(base, mark, m, x, y) {
+                    .err(e) => {
+                        image.close(base)
+                        image.close(mark)
+                        .err(e)
+                    },
+                    .ok(h2) => saved(h2, path),
+                },
+            },
+        },
+    }
+}
+
+/// Save a copy in another format with a quality setting.
+pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.save_jpeg_to(h, out, quality) {
+            .err(e) => {
+                image.close(h)
+                .err(e)
+            },
+            .ok(p) => {
+                image.close(h)
+                .ok(p)
+            },
+        },
+    }
+}
+
+pub func save_png(path: str, out: str, compression: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.save_png_to(h, out, compression) {
+            .err(e) => {
+                image.close(h)
+                .err(e)
+            },
+            .ok(p) => {
+                image.close(h)
+                .ok(p)
+            },
+        },
+    }
+}
+
+pub func save_webp(path: str, out: str, quality: int) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e),
+        .ok(h) => match image.save_webp_to(h, out, quality) {
+            .err(e) => {
+                image.close(h)
+                .err(e)
+            },
+            .ok(p) => {
+                image.close(h)
+                .ok(p)
+            },
+        },
+    }
+}

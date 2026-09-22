@@ -75,6 +75,10 @@ src/ops.zz      one-shot lifecycle (load → transform → save → close)
 src/image.zz    single-owner handle pipeline (the chaining primitives)
 ```
 
+(Removed `src/ffi.zz` / `src/error.zz` pointer-style extern layer and
+`src/util.zz` duplicate counter: unreferenced — the int-handle
+`plugin.zzi` layer and `image.live_handles()` are canonical.)
+
 Raw `zimg_*` names are intentionally flat and internal: ZZ resolves
 free-function calls on one- and two-part paths only, so a deeper
 namespace cannot work for them. The supported surface is `zimg.*`.

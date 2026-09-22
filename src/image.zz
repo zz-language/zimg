@@ -24,6 +24,14 @@ pub func live_handles() -> int {
     zimg_live_handles()
 }
 
+/// Tune the shared libvips worker pool (0 = default, CPU cores). The
+/// pool is global and shared by all threads: ZZ threads submit work to
+/// it rather than each spawning workers, so there is no
+/// oversubscription by design. Call before heavy parallel use.
+pub func set_workers(n: int) {
+    zimg_set_concurrency(n)
+}
+
 func ensure_init() -> Result<int, str> {
     code := zimg_init()
     if code != 0 {
@@ -113,4 +121,129 @@ pub func save_to(handle: int, path: str) -> Result<str, str> {
 /// Release a handle. After close the value must not be used.
 pub func close(handle: int) {
     zimg_release(handle)
+}
+
+/// Resampling kernels (VipsKernel ints).
+pub func kernel_named(name: str) -> Result<int, str> {
+    match name {
+        "nearest" => .ok(0),
+        "linear" => .ok(1),
+        "cubic" => .ok(2),
+        "mitchell" => .ok(3),
+        "lanczos2" => .ok(4),
+        "lanczos3" => .ok(5),
+        _ => .err("unknown kernel"),
+    }
+}
+
+pub func resize_kernel_to(handle: int, scale: float, kernel: int) -> Result<int, str> {
+    replace("zimg.resize_kernel", handle, zimg_resize_kernel(handle, scale, kernel))
+}
+
+/// Thumbnail crop modes (VipsInteresting ints).
+pub func crop_mode_named(name: str) -> Result<int, str> {
+    match name {
+        "none" => .ok(0),
+        "centre" => .ok(1),
+        "entropy" => .ok(2),
+        "attention" => .ok(3),
+        _ => .err("unknown crop mode"),
+    }
+}
+
+/// Fit inside width×height; nonzero crop mode fills exactly.
+pub func thumbnail_to(handle: int, width: int, height: int, crop: int) -> Result<int, str> {
+    replace("zimg.thumbnail", handle, zimg_thumbnail(handle, width, height, crop))
+}
+
+/// Arbitrary-angle rotate (degrees, clockwise). Exact right angles take
+/// the lossless path internally; other angles expand the canvas.
+/// Background: transparent when the image has alpha, else black, unless
+/// rgb is given (rotate_bg_to).
+pub func rotate_free_to(handle: int, angle: float) -> Result<int, str> {
+    replace("zimg.rotate_free", handle, zimg_rotate_free(handle, angle, 0, 0, 0, 0))
+}
+
+pub func rotate_bg_to(handle: int, angle: float, r: int, g: int, b: int) -> Result<int, str> {
+    replace("zimg.rotate_free", handle, zimg_rotate_free(handle, angle, r, g, b, 1))
+}
+
+pub func grayscale(handle: int) -> Result<int, str> {
+    replace("zimg.grayscale", handle, zimg_grayscale(handle))
+}
+
+/// Tone: out = in * contrast + brightness (brightness in levels,
+/// e.g. +10 lifts; contrast 1.0 is neutral).
+pub func bright_contrast(handle: int, brightness: float, contrast: float) -> Result<int, str> {
+    replace("zimg.bright_contrast", handle, zimg_brightness_contrast(handle, brightness, contrast))
+}
+
+/// Curated colorspace names (VipsInterpretation ints).
+pub func colorspace_named(name: str) -> Result<int, str> {
+    match name {
+        "bw" => .ok(1),
+        "cmyk" => .ok(15),
+        "srgb" => .ok(22),
+        "grey16" => .ok(26),
+        _ => .err("unknown colorspace"),
+    }
+}
+
+pub func to_colorspace(handle: int, cs: int) -> Result<int, str> {
+    replace("zimg.to_colorspace", handle, zimg_to_colorspace(handle, cs))
+}
+
+/// Sharpen (sigma). Auto-casts to sRGB first; sharpen rejects untagged
+/// input internally, so synthetic images work without a manual cast.
+pub func sharpen_by(handle: int, sigma: float) -> Result<int, str> {
+    replace("zimg.sharpen", handle, zimg_sharpen(handle, sigma))
+}
+
+/// Blend modes (VipsBlendMode ints).
+pub func blend_named(name: str) -> Result<int, str> {
+    match name {
+        "over" => .ok(2),
+        "in" => .ok(3),
+        "atop" => .ok(5),
+        "xor" => .ok(11),
+        "multiply" => .ok(14),
+        _ => .err("unknown blend mode"),
+    }
+}
+
+/// Shared two-handle replace (composite): on success the C side has
+/// already consumed BOTH inputs — just adopt the result. On failure
+/// both handles stay valid.
+func replace2(op: str, code: int) -> Result<int, str> {
+    match checked(op, code) {
+        .err(e) => .err(e),
+        .ok(_c) => .ok(zimg_get_result()),
+    }
+}
+
+/// Overlay `mark` onto `base` at (x, y). Consumes both handles.
+pub func composite_onto(base: int, mark: int, mode: int, x: int, y: int) -> Result<int, str> {
+    replace2("zimg.composite", zimg_composite(base, mark, mode, x, y))
+}
+
+/// Format saves with quality params. Borrow the handle (no consume).
+pub func save_jpeg_to(handle: int, path: str, quality: int) -> Result<str, str> {
+    match checked("zimg.save_jpeg", zimg_save_jpeg(handle, path, quality)) {
+        .err(e) => .err(e),
+        .ok(_c) => .ok(path),
+    }
+}
+
+pub func save_png_to(handle: int, path: str, compression: int) -> Result<str, str> {
+    match checked("zimg.save_png", zimg_save_png(handle, path, compression)) {
+        .err(e) => .err(e),
+        .ok(_c) => .ok(path),
+    }
+}
+
+pub func save_webp_to(handle: int, path: str, quality: int) -> Result<str, str> {
+    match checked("zimg.save_webp", zimg_save_webp(handle, path, quality)) {
+        .err(e) => .err(e),
+        .ok(_c) => .ok(path),
+    }
 }

@@ -18,7 +18,52 @@ pub func blur(path: str, sigma: float) -> Result<str, str> {
     ops.blur(path, sigma)
 }
 
+pub func thumbnail(path: str, width: int, height: int, crop_mode: str) -> Result<str, str> {
+    ops.thumbnail(path, width, height, crop_mode)
+}
+
+pub func rotate_free(path: str, angle: float) -> Result<str, str> {
+    ops.rotate_free(path, angle)
+}
+
+pub func rotate_bg(path: str, angle: float, r: int, g: int, b: int) -> Result<str, str> {
+    ops.rotate_bg(path, angle, r, g, b)
+}
+
+pub func grayscale(path: str) -> Result<str, str> {
+    ops.grayscale(path)
+}
+
+pub func bright_contrast(path: str, brightness: float, contrast: float) -> Result<str, str> {
+    ops.bright_contrast(path, brightness, contrast)
+}
+
+pub func sharpen(path: str, sigma: float) -> Result<str, str> {
+    ops.sharpen(path, sigma)
+}
+
+pub func watermark(path: str, mark_path: str, mode: str, x: int, y: int) -> Result<str, str> {
+    ops.watermark(path, mark_path, mode, x, y)
+}
+
+pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
+    ops.save_jpeg(path, out, quality)
+}
+
+pub func save_png(path: str, out: str, compression: int) -> Result<str, str> {
+    ops.save_png(path, out, compression)
+}
+
+pub func save_webp(path: str, out: str, quality: int) -> Result<str, str> {
+    ops.save_webp(path, out, quality)
+}
+
 /// Debug live-handle counter (produced minus released). Zero at exit.
 pub func live_handles() -> int {
     image.live_handles()
+}
+
+/// Tune the shared libvips worker pool (0 = default, CPU cores).
+pub func set_workers(n: int) {
+    image.set_workers(n)
 }

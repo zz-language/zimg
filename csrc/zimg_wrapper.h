@@ -25,7 +25,12 @@
  *     libraries using the single-slot idiom. Define NDEBUG (or
  *     ZIMG_NO_SLOT_CHECK) for production.
  *
- * Threading: single-threaded only (global error buffer + result slot).
+ * Threading: thread-safe for independent per-thread pipelines. The
+ * result slot, pending flag, and error buffer are thread-local; the
+ * live counter is atomic; init runs once via pthread_once. libvips
+ * contributes one global worker pool shared by all threads (tune with
+ * zimg_set_concurrency). zimg_shutdown() releases the calling thread's
+ * slot and shuts libvips down: call once, after all threads join.
  */
 
 #ifndef ZIMG_WRAPPER_H
@@ -72,6 +77,38 @@ int zimg_rot(void* img, int angle);
 /* Flip. 0=horizontal, 1=vertical. */
 int zimg_flip(void* img, int direction);
 
+/* Resize with explicit resampling kernel (VipsKernel int: 0=nearest,
+ * 1=linear, 2=cubic, 3=mitchell, 4=lanczos2, 5=lanczos3, ...). */
+int zimg_resize_kernel(void* img, double scale, int kernel);
+
+/* Fit inside width×height (thumbnail semantics). crop is VipsInteresting
+ * (0=none/fit, 1=centre, ...): nonzero crops to fill exactly. */
+int zimg_thumbnail(void* img, int width, int height, int crop);
+
+/* Arbitrary-angle rotate (degrees, clockwise). Exact right angles take
+ * the lossless vips_rot path; others expand the canvas via vips_rotate.
+ * has_bg=0: transparent when the image has alpha, else black.
+ * has_bg=1: rgb fill (opaque alpha when present). */
+int zimg_rotate_free(void* img, double angle, int r, int g, int b, int has_bg);
+
+/* Luminance grayscale (B_W interpretation). */
+int zimg_grayscale(void* img);
+
+/* Tone: out = in * contrast + brightness (brightness in levels). */
+int zimg_brightness_contrast(void* img, double brightness, double contrast);
+
+/* Cast to a VipsInterpretation (int). Errors surface for bad values. */
+int zimg_to_colorspace(void* img, int cs);
+
+/* Sharpen (sigma). Auto-casts to sRGB first (noop when already sRGB);
+ * sharpen rejects untagged input internally. */
+int zimg_sharpen(void* img, double sigma);
+
+/* Pairwise composite (watermark/overlay): overlay placed at (x, y) with
+ * blend mode (VipsBlendMode int, 2=over). Consumes BOTH inputs on
+ * success (both released, result adopted); touches nothing on failure. */
+int zimg_composite(void* base, void* overlay, int mode, int x, int y);
+
 /* ── Operations that return a scalar ──────────────────────────────── */
 
 /* Get width in pixels. Returns -1 on error (null handle). */
@@ -113,7 +150,8 @@ void* zimg_get_result(void);
 
 /* ── Error handling ───────────────────────────────────────────────── */
 
-/* Last error message. NOT thread-safe. Valid until next zimg_* call. */
+/* Last error message. Thread-local: valid until the next zimg_* call
+ * on THIS thread; a racing thread's failure cannot clobber it. */
 const char* zimg_last_error(void);
 
 /* Clear error buffer. */

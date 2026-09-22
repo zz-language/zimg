@@ -33,6 +33,21 @@ if ! command -v cargo >/dev/null 2>&1; then
 	exit 1
 fi
 
+# ── Stamp toolchain version ─────────────────────────────────────────
+#
+# Hand-written `// Rustc:` stamps rot (1.85.0 shipped while building
+# with 1.97.1). Refresh it from the real toolchain every build;
+# idempotent when already current (content-identical → no hash churn).
+# The loader records it for diagnostics; ABI refusal keys off
+# ZZ_PLUGIN_ABI_VERSION, not this string.
+if command -v rustc >/dev/null 2>&1; then
+	RV=$(rustc -V | awk '{print $2}')
+	if [ -n "$RV" ] && [ -f "$SCRIPT_DIR/plugin.zzi" ]; then
+		sed -i.bak "s|^// Rustc: .*|// Rustc: $RV|" "$SCRIPT_DIR/plugin.zzi"
+		rm -f "$SCRIPT_DIR/plugin.zzi.bak"
+	fi
+fi
+
 # ── Compile C wrapper ───────────────────────────────────────────────
 
 CFLAGS=$(pkg-config --cflags vips)

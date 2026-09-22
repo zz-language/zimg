@@ -6,15 +6,25 @@
 
 #include "zimg_wrapper.h"
 
+#include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <vips/vips.h>
 
 /* ── Internal state ───────────────────────────────────────────────── */
+/* Concurrency contract (§3): every thread runs an independent pipeline.
+ * The result slot, pending flag, and error buffer are thread-local, so
+ * two threads can load/transform/fail simultaneously without inter-
+ * leaving. The live counter is atomic (exact across threads). libvips
+ * itself is thread-safe with one global worker pool shared by all
+ * threads — no oversubscription by design (see set_workers). Init runs
+ * exactly once via pthread_once; concurrent first-loads serialize
+ * through it. */
 
-static char _last_error[2048] = {0};
-static void* _last_result = NULL;  /* opaque: actually a VipsImage* */
+static _Thread_local char _last_error[2048] = {0};
+static _Thread_local void* _last_result = NULL;  /* opaque: actually a VipsImage* */
 
 /* Debug-mode result-slot guard (item 6 convention).
  *
@@ -27,7 +37,7 @@ static void* _last_result = NULL;  /* opaque: actually a VipsImage* */
  */
 #ifndef NDEBUG
 #ifndef ZIMG_NO_SLOT_CHECK
-static int _result_pending = 0;  /* 1 while slot holds an unconsumed image */
+static _Thread_local int _result_pending = 0;  /* 1 while slot holds an unconsumed image */
 
 static void _slot_check_overwrite(const char* producer) {
     if (_result_pending && _last_result) {
@@ -79,10 +89,10 @@ static void _clear_error(void) { _last_error[0] = '\0'; }
 
 /* Debug live-handle counter: incremented for every produced image,
  * decremented on every release. Tests assert zero at exit (no leaks).
- * Always compiled in (two integer ops); not gated on NDEBUG. */
-static int _live_handles = 0;
+ * Atomic: exact across threads. Always compiled in. */
+static atomic_int _live_handles = 0;
 
-int zimg_live_handles(void) { return _live_handles; }
+int zimg_live_handles(void) { return atomic_load(&_live_handles); }
 
 static void _set_result(VipsImage* vips, const char* producer) {
     ZIMG_SLOT_GUARD(producer);
@@ -90,24 +100,26 @@ static void _set_result(VipsImage* vips, const char* producer) {
     if (_last_result) {
         g_object_unref(_last_result);
         _last_result = NULL;
-        _live_handles--;
+        atomic_fetch_sub(&_live_handles, 1);
     }
     _last_result = vips;
     if (vips) {
         ZIMG_SLOT_SET();
-        _live_handles++;
+        atomic_fetch_add(&_live_handles, 1);
     }
 }
 
 /* ── Init / shutdown ──────────────────────────────────────────────── */
 
-int zimg_init(void) {
-    _clear_error();
-    _last_result = NULL;
+static pthread_once_t _init_once = PTHREAD_ONCE_INIT;
+static int _init_rc = 0;
+
+static void _do_init(void) {
     if (VIPS_INIT("zimg")) {
         _set_error(vips_error_buffer());
         vips_error_clear();
-        return -1;
+        _init_rc = -1;
+        return;
     }
     /* Mogrify semantics: every load must re-read its file, even when a
      * previous load of the same path was overwritten moments ago
@@ -115,14 +127,24 @@ int zimg_init(void) {
      * the operation cache for the process; saves stay synchronous and
      * every load observes the current file contents. */
     vips_cache_set_max(0);
-    return 0;
+}
+
+int zimg_init(void) {
+    /* Slot starts empty on every thread by construction (thread-local),
+     * so init can orphan nothing. Error buffer is thread-local: a racing
+     * thread's failure cannot clobber this thread's message. */
+    _last_result = NULL;
+    pthread_once(&_init_once, _do_init);
+    return _init_rc;
 }
 
 void zimg_shutdown(void) {
+    /* Release the CALLING thread's pending slot. Call once, after all
+     * threads have joined: vips_shutdown() while workers run is UB. */
     if (_last_result) {
         g_object_unref(_last_result);
         _last_result = NULL;
-        _live_handles--;
+        atomic_fetch_sub(&_live_handles, 1);
     }
     vips_shutdown();
 }
@@ -251,6 +273,186 @@ int zimg_flip(void* img, int direction) {
     return 0;
 }
 
+/* ── Round 2: Pillow-parity ops ─────────────────────────────────────── */
+
+int zimg_resize_kernel(void* img, double scale, int kernel) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    if (kernel < 0 || kernel >= VIPS_KERNEL_LAST) {
+        _set_error("unknown resampling kernel");
+        return -1;
+    }
+    VipsImage* out = NULL;
+    if (vips_resize((VipsImage*)img, &out, scale, "kernel", (VipsKernel)kernel, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_resize_kernel");
+    return 0;
+}
+
+int zimg_thumbnail(void* img, int width, int height, int crop) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    if (width <= 0 || height <= 0) { _set_error("invalid dimensions"); return -1; }
+    if (crop < 0 || crop >= VIPS_INTERESTING_LAST) {
+        _set_error("unknown crop mode");
+        return -1;
+    }
+    VipsImage* out = NULL;
+    if (vips_thumbnail_image((VipsImage*)img, &out, width,
+            "height", height, "crop", (VipsInteresting)crop, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_thumbnail");
+    return 0;
+}
+
+int zimg_rotate_free(void* img, double angle, int r, int g, int b, int has_bg) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    /* Exact right angles take the lossless path (no resampling, no fill);
+     * anything else expands the canvas via vips_rotate. (No libm: the
+     * rounding below is manual so consumers never need -lm.) */
+    double q = angle / 90.0;
+    long n = (long)(q >= 0.0 ? q + 0.5 : q - 0.5);
+    double dq = q - (double)n;
+    if (dq < 0.0) dq = -dq;
+    VipsImage* out = NULL;
+    if (dq < 1e-9) {
+        int quad = (int)(((n % 4) + 4) % 4);
+        if (vips_rot((VipsImage*)img, &out, quad, NULL)) {
+            _set_error(vips_error_buffer());
+            vips_error_clear();
+            return -1;
+        }
+        _set_result(out, "zimg_rotate_free");
+        return 0;
+    }
+    /* Background: transparent when the image carries alpha and the caller
+     * gave no colour; otherwise the caller's rgb, defaulting to black. */
+    VipsImage* src = (VipsImage*)img;
+    int bands = vips_image_get_bands(src);
+    int has_alpha = vips_image_hasalpha(src);
+    if (bands > 4) bands = 4;
+    double bgvals[4];
+    if (!has_bg && has_alpha) {
+        for (int i = 0; i < bands; i++) bgvals[i] = 0.0;
+    } else {
+        double rgb[3] = {(double)r, (double)g, (double)b};
+        for (int i = 0; i < bands; i++)
+            bgvals[i] = (has_alpha && i == bands - 1) ? 255.0 : rgb[i < 3 ? i : 0];
+    }
+    VipsArrayDouble* bg = vips_array_double_new(bgvals, bands);
+    int rc = vips_rotate(src, &out, angle, "background", bg, NULL);
+    vips_area_unref(VIPS_AREA(bg));
+    if (rc) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_rotate_free");
+    return 0;
+}
+
+int zimg_grayscale(void* img) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    VipsImage* out = NULL;
+    if (vips_colourspace((VipsImage*)img, &out, VIPS_INTERPRETATION_B_W, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_grayscale");
+    return 0;
+}
+
+int zimg_brightness_contrast(void* img, double brightness, double contrast) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    VipsImage* out = NULL;
+    /* out = in * contrast + brightness (brightness in absolute levels). */
+    if (vips_linear1((VipsImage*)img, &out, contrast, brightness, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_brightness_contrast");
+    return 0;
+}
+
+int zimg_to_colorspace(void* img, int cs) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    if (cs < 0 || cs >= VIPS_INTERPRETATION_LAST) {
+        _set_error("unknown colorspace");
+        return -1;
+    }
+    VipsImage* out = NULL;
+    if (vips_colourspace((VipsImage*)img, &out, (VipsInterpretation)cs, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_to_colorspace");
+    return 0;
+}
+
+int zimg_sharpen(void* img, double sigma) {
+    _clear_error();
+    if (!img) { _set_error("null image"); return -1; }
+    /* Sharpen routes through Lab internally and rejects untagged input:
+     * ensure sRGB first (noop when already sRGB). The temp is unref'd
+     * directly — never slot-tracked, never counted. */
+    VipsImage* src = (VipsImage*)img;
+    VipsImage* casted = NULL;
+    if (src->Type != VIPS_INTERPRETATION_sRGB) {
+        if (vips_colourspace(src, &casted, VIPS_INTERPRETATION_sRGB, NULL)) {
+            _set_error(vips_error_buffer());
+            vips_error_clear();
+            return -1;
+        }
+        src = casted;
+    }
+    VipsImage* out = NULL;
+    int rc = vips_sharpen(src, &out, "sigma", sigma, NULL);
+    if (casted) g_object_unref(casted);
+    if (rc) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    _set_result(out, "zimg_sharpen");
+    return 0;
+}
+
+int zimg_composite(void* base, void* overlay, int mode, int x, int y) {
+    _clear_error();
+    if (!base || !overlay) { _set_error("null image"); return -1; }
+    if (mode < 0 || mode >= VIPS_BLEND_MODE_LAST) {
+        _set_error("unknown blend mode");
+        return -1;
+    }
+    VipsImage* out = NULL;
+    if (vips_composite2((VipsImage*)base, (VipsImage*)overlay, &out,
+            (VipsBlendMode)mode, "x", x, "y", y, NULL)) {
+        _set_error(vips_error_buffer());
+        vips_error_clear();
+        return -1;
+    }
+    /* Composite consumes BOTH inputs: adopt the result, release the pair.
+     * On failure nothing is touched — both handles stay valid. */
+    _set_result(out, "zimg_composite");
+    g_object_unref(base);
+    g_object_unref(overlay);
+    atomic_fetch_sub(&_live_handles, 2);
+    return 0;
+}
+
 /* ── Scalar accessors ─────────────────────────────────────────────── */
 
 int zimg_width(void* img) {
@@ -306,7 +508,7 @@ int zimg_save_webp(void* img, const char* path, int quality) {
 void zimg_release(void* img) {
     if (img) {
         g_object_unref(img);
-        _live_handles--;
+        atomic_fetch_sub(&_live_handles, 1);
     }
 }
 
