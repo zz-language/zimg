@@ -1,5 +1,5 @@
 // zimg.zz — package entry: the ergonomic public API.
-//
+// 
 // Consumers write `import zimg`, then `zimg.resize(...)` etc. All raw
 // FFI (`zimg.raw.*`) stays inside image.zz / ops.zz.
 
@@ -79,11 +79,13 @@ pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Resul
 }
 
 /// Debug live-handle counter (produced minus released). Zero at exit.
+
 pub func live_handles() -> int {
     image.live_handles()
 }
 
 /// Tune the shared libvips worker pool (0 = default, CPU cores).
+
 pub func set_workers(n: int) {
     image.set_workers(n)
 }

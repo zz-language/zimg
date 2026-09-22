@@ -1,9 +1,9 @@
 // ops_test.zz — one-shot coverage for every public zimg.* op.
-//
+// 
 // Each check copies the fixture to a private work file (mogrify semantics
 // overwrite in place), runs the op, asserts dimensions/leak-freedom.
 // Run via ../run_tests.sh (zz run + zz build, both engines).
-//
+// 
 // NOTE: checks keep zero array locals (dim_w/dim_h helpers) — a zz VM
 // frame-slot bug panics on several live [int] locals beside match
 // statements (see README "Known toolchain gaps").
@@ -19,21 +19,21 @@ func work_path(tag: str) -> str {
 func fresh_copy(tag: str) -> str {
     p := work_path(tag)
     match fs.copy(FIXTURE, p) {
-        .ok(_v) => p,
+        .ok(_v) => p
         .err(e) => {
             fail("fixture copy: {e}")
             ""
-        },
+        }
     }
 }
 
 func dims_of(path: str) -> [int] {
     match zimg.dims(path) {
-        .ok(d) => d,
+        .ok(d) => d
         .err(e) => {
             fail("dims {path}: {e}")
             [0, 0]
-        },
+        }
     }
 }
 
@@ -49,8 +49,8 @@ func dim_h(path: str) -> int {
 
 func expect_ok(r: Result<str, str>, op: str) {
     match r {
-        .ok(p) => println("{op} -> {p}"),
-        .err(e) => fail("{op}: {e}"),
+        .ok(p) => println("{op} -> {p}")
+        .err(e) => fail("{op}: {e}")
     }
 }
 
@@ -81,8 +81,8 @@ func check_rotate_all_angles() {
 func check_rotate_rejects_free_angle() {
     p := fresh_copy("rotbad")
     match zimg.rotate(p, 45) {
-        .ok(_) => fail("rotate 45 should be rejected"),
-        .err(e) => println("rejected: {e}"),
+        .ok(_) => fail("rotate 45 should be rejected")
+        .err(e) => println("rejected: {e}")
     }
     assert_eq(zimg.live_handles(), 0)
     println("rotate_reject: PASS")
@@ -106,13 +106,11 @@ func check_flip_both() {
     expect_ok(zimg.flip(p, "horizontal"), "flip h")
     assert_eq(dim_w(p), w0)
     assert_eq(dim_h(p), h0)
-
     q := fresh_copy("flipv")
     expect_ok(zimg.flip(q, "vertical"), "flip v")
-
     match zimg.flip(q, "diagonal") {
-        .ok(_) => fail("bad flip direction should be rejected"),
-        .err(_e) => println("flip direction rejected"),
+        .ok(_) => fail("bad flip direction should be rejected")
+        .err(_e) => println("flip direction rejected")
     }
     assert_eq(zimg.live_handles(), 0)
     println("flip: PASS")
@@ -138,15 +136,13 @@ func check_thumbnail() {
     assert(th <= 64)
     assert(tw > 0)
     assert(th > 0)
-
     q := fresh_copy("thumbc")
     expect_ok(zimg.thumbnail(q, 64, 64, "centre"), "thumbnail centre")
     assert_eq(dim_w(q), 64)
     assert_eq(dim_h(q), 64)
-
     match zimg.thumbnail(q, 64, 64, "bogus") {
-        .ok(_) => fail("bad crop mode should be rejected"),
-        .err(_e) => println("crop mode rejected"),
+        .ok(_) => fail("bad crop mode should be rejected")
+        .err(_e) => println("crop mode rejected")
     }
     assert_eq(zimg.live_handles(), 0)
     println("thumbnail: PASS")
@@ -200,8 +196,8 @@ func check_colorspace() {
     p := fresh_copy("cs")
     expect_ok(zimg.to_colorspace(p, "bw"), "colorspace bw")
     match zimg.to_colorspace(p, "bogus") {
-        .ok(_) => fail("bad colorspace should be rejected"),
-        .err(_e) => println("colorspace rejected"),
+        .ok(_) => fail("bad colorspace should be rejected")
+        .err(_e) => println("colorspace rejected")
     }
     assert_eq(zimg.live_handles(), 0)
     println("colorspace: PASS")
@@ -215,8 +211,8 @@ func check_resize_kernel() {
     assert(kw <= 64)
     assert(kh <= 64)
     match zimg.resize_kernel(p, 64, 64, "bogus") {
-        .ok(_) => fail("bad kernel should be rejected"),
-        .err(_e) => println("kernel rejected"),
+        .ok(_) => fail("bad kernel should be rejected")
+        .err(_e) => println("kernel rejected")
     }
     assert_eq(zimg.live_handles(), 0)
     println("resize_kernel: PASS")
@@ -242,12 +238,12 @@ func check_watermark() {
     mark := fresh_copy("wmark")
     expect_ok(zimg.watermark(base, mark, "over", 4, 4), "watermark")
     match zimg.watermark(base, mark, "bogus", 0, 0) {
-        .ok(_) => fail("bad blend mode should be rejected"),
-        .err(_e) => println("blend mode rejected"),
+        .ok(_) => fail("bad blend mode should be rejected")
+        .err(_e) => println("blend mode rejected")
     }
     match zimg.watermark(base, "nonexistent_mark.jpg", "over", 0, 0) {
-        .ok(_) => fail("missing mark should be rejected"),
-        .err(_e) => println("missing mark rejected"),
+        .ok(_) => fail("missing mark should be rejected")
+        .err(_e) => println("missing mark rejected")
     }
     assert_eq(zimg.live_handles(), 0)
     println("watermark: PASS")

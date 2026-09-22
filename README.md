@@ -49,6 +49,8 @@ cd tests/e2e
 ./run_tests.sh   # install + every check file on VM (zz run) and AOT (zz build)
 ```
 
+(`ZZ=/path/to/zz` overrides the toolchain; CI builds it from source.)
+
 17 checks in `src/m1_test.zz` (round-trip, metadata, missing-file) and
 `src/ops_test.zz` (all 13 one-shots, angle/name rejections, format
 saves, watermark incl. missing-mark). Each check asserts
@@ -75,6 +77,28 @@ exit; a hello-world binary leaks 2 the same way). Zero leaked
 - Relative `[dependencies.zimg] path = "../.."` breaks the AOT
   build-hook (`../../build.sh` not found); `tests/e2e/zz.toml` uses an
   absolute path until hook resolution is fixed upstream.
+
+## Toolchain pin
+
+`native/Cargo.toml` pins `zz_runtime` to `zaidejjo/zz` tag
+`tutorial/fnv-pin` (rustc 1.97.1, libvips 8.18.6 tested). Bump procedure:
+retarget the tag, run `./build.sh` (the `// Rustc:` stamp refreshes
+itself), then `cd tests/e2e && ./run_tests.sh` — a green 4/4 means the
+glue still matches `zz_runtime`'s `Value`/`EvalError` shapes. The
+previous rot ("match actual zz_runtime types") is exactly what this
+catches.
+
+## Roadmap
+
+- **Buffer I/O** (blocked on upstream): `new_from_buffer` /
+  `write_to_buffer` need `bytes` across the plugin ABI, which today
+  only allows int/float/bool/str/void/unit/ptr params and int returns
+  (`zz_plugin/src/manifest.rs`: `bytes` maps to `Void` → `NonCType`
+  rejection). No base64-over-`str` workaround — it would betray the
+  positioning. Unblocks the cloud path from the notes (decode uploads,
+  encode responses, no temp files).
+- **Custom Meson libvips** (notes §1+§5): gated on LGPL redistribution
+  review per THIRD_PARTY_NOTICES.md — out of scope until then.
 
 ## Pillow side-by-side
 

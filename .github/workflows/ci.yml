@@ -1,0 +1,39 @@
+name: zimg CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  # Upstream toolchain source. Local dev overrides with ZZ=/path/to/zz
+  # (run_tests.sh honors $ZZ) and is usually ahead of this ref.
+  ZZ_REPO: https://github.com/zaidejjo/zz
+  ZZ_REF: tutorial/fnv-pin
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: zimg
+
+      - name: Install libvips
+        run: sudo apt-get update && sudo apt-get install -y libvips-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build zz toolchain
+        run: |
+          git clone --depth 1 --branch "$ZZ_REF" "$ZZ_REPO" zz_lang || git clone --depth 1 "$ZZ_REPO" zz_lang
+          cargo install --path zz_lang/crates/zz_cli --root "$HOME/.zz-bin"
+          echo "$HOME/.zz-bin/bin" >> "$GITHUB_PATH"
+
+      - name: Build native glue
+        working-directory: zimg
+        run: ./build.sh
+
+      - name: Run e2e (VM + AOT)
+        working-directory: zimg/tests/e2e
+        run: ZZ=zz ./run_tests.sh
