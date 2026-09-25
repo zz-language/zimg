@@ -233,6 +233,22 @@ func check_format_saves() {
     println("format_saves: PASS")
 }
 
+func check_save_as() {
+    p := fresh_copy("saveas")
+    w0 := dim_w(p)
+    expect_ok(zimg.save_as(p, "/tmp/zimg-e2e-copy.png"), "save_as")
+    // Copy carries the pixels; the original is untouched.
+    assert_eq(dim_w("/tmp/zimg-e2e-copy.png"), w0)
+    assert_eq(dim_w(p), w0)
+    // Unsupported output extension is a clean error, input unharmed.
+    match zimg.save_as(p, "/tmp/zimg-e2e-copy.bmp") {
+        .ok(_) => fail("bmp save should be rejected")
+        .err(_e) => println("save_as format rejected")
+    }
+    assert_eq(zimg.live_handles(), 0)
+    println("save_as: PASS")
+}
+
 func check_rejects_bad_ranges() {
     p := fresh_copy("badrange")
     match zimg.save_jpeg(p, "/tmp/zimg-e2e-bad.jpg", 999) {
@@ -259,7 +275,8 @@ func check_rejects_bad_ranges() {
     println("reject_ranges: PASS")
 }
 
-func check_watermark() {    base := fresh_copy("wbase")
+func check_watermark() {
+    base := fresh_copy("wbase")
     mark := fresh_copy("wmark")
     expect_ok(zimg.watermark(base, mark, "over", 4, 4), "watermark")
     match zimg.watermark(base, mark, "bogus", 0, 0) {
@@ -288,6 +305,7 @@ func main() {
     check_colorspace()
     check_resize_kernel()
     check_format_saves()
+    check_save_as()
     check_watermark()
     check_rejects_bad_ranges()
     assert_eq(zimg.live_handles(), 0)

@@ -50,6 +50,10 @@ pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
     ops.save_jpeg(path, out, quality)
 }
 
+pub func save_as(path: str, out: str) -> Result<str, str> {
+    ops.save_as(path, out)
+}
+
 pub func save_png(path: str, out: str, compression: int) -> Result<str, str> {
     ops.save_png(path, out, compression)
 }

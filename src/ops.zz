@@ -333,6 +333,25 @@ pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Resul
         }
     }
 }
+/// Save a copy of the image at `path` to `out`, format auto-detected
+/// from `out`'s extension. The input file is untouched — the
+/// non-destructive counterpart to the mogrify one-shots. Returns `out`.
+
+pub func save_as(path: str, out: str) -> Result<str, str> {
+    match image.load(path) {
+        .err(e) => .err(e)
+        .ok(h) => match image.save_to(h, out) {
+            .err(e) => {
+                image.close(h)
+                .err(e)
+            }
+            .ok(p) => {
+                image.close(h)
+                .ok(p)
+            }
+        }
+    }
+}
 /// Save a copy in another format with a quality setting.
 
 pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
