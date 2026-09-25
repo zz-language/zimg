@@ -147,12 +147,28 @@ static void _set_result(VipsImage* vips, const char* producer) {
     }
 }
 
-/* ── Init / shutdown ──────────────────────────────────────────────── */
+/* ── VIPS log filter ──────────────────────────────────────────────── */
+/* System libvips probes every module in its plugin dir at init; a missing
+ * optional backend (e.g. openslide) prints a VIPS-WARNING on every process
+ * start. Pillow-quiet ergonomics: drop "unable to load …" module noise,
+ * forward everything else to the default handler. Real failures surface
+ * as vips errors (return codes), never as warnings. */
+static void _vips_log_filter(
+    const gchar* domain, GLogLevelFlags level, const gchar* message, gpointer _data
+) {
+    (void)domain;
+    (void)level;
+    (void)_data;
+    if (message && strstr(message, "unable to load \"") != NULL) return;
+    g_log_default_handler(domain, level, message, _data);
+}
 
 static pthread_once_t _init_once = PTHREAD_ONCE_INIT;
 static int _init_rc = 0;
 
 static void _do_init(void) {
+    /* Install before VIPS_INIT: module probing happens during init. */
+    g_log_set_handler("VIPS", G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE, _vips_log_filter, NULL);
     if (VIPS_INIT("zimg")) {
         _set_error(vips_error_buffer());
         vips_error_clear();
