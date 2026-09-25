@@ -7,3 +7,4 @@ build/
 tests/e2e/vendor/
 tests/e2e/src/bin/
 tests/e2e/zz.lock
+/*.tar.gz
