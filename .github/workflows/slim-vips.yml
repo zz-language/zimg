@@ -1,0 +1,165 @@
+# Slim libvips matrix: build locked-cut tarballs per triple and attach them
+# to the `vips-slim-v<VERSION>` GitHub release with a merged SHA256SUMS.
+#
+# Run: Actions → "slim-vips" → Run workflow (or push tag `vips-slim-v*`).
+# linux-x64 is proven locally; every other triple lights up here.
+# Runners have full dev packages, so no glib-mkenums overlay is needed
+# (that hack is local-box-only).
+
+name: slim-vips
+
+on:
+  workflow_dispatch:
+    inputs:
+      vips_version:
+        description: 'libvips release tag (e.g. 8.18.6)'
+        default: '8.18.6'
+        required: true
+      release_tag:
+        description: 'GitHub release tag to attach to'
+        default: 'vips-slim-v1.0.0'
+        required: true
+  push:
+    tags:
+      - 'vips-slim-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: slim ${{ matrix.triple }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - triple: linux-x64
+            runner: ubuntu-24.04
+          - triple: linux-arm64
+            runner: ubuntu-24.04-arm
+          - triple: darwin-arm64
+            runner: macos-14
+          - triple: darwin-x64
+            runner: macos-15-intel
+          - triple: win-x64
+            runner: windows-2025
+    defaults:
+      run:
+        shell: ${{ matrix.triple == 'win-x64' && 'msys2 {0}' || 'bash' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps (linux)
+        if: startsWith(matrix.triple, 'linux-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build pkg-config curl ca-certificates \
+            libglib2.0-dev libarchive-dev libexif-dev \
+            libjpeg-turbo8-dev libpng-dev libspng-dev \
+            libwebp-dev libheif-dev libpoppler-glib-dev \
+            libhwy-dev liborc-0.4-dev
+
+      - name: Install build deps (macOS)
+        if: startsWith(matrix.triple, 'darwin-')
+        run: |
+          brew update
+          brew install meson ninja pkg-config \
+            glib libarchive libexif \
+            jpeg-turbo libpng libspng libwebp libheif poppler \
+            highway orc
+
+      - name: Set up MSYS2 (Windows)
+        if: matrix.triple == 'win-x64'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-cc
+            mingw-w64-ucrt-x86_64-glib2
+            mingw-w64-ucrt-x86_64-libarchive
+            mingw-w64-ucrt-x86_64-libexif
+            mingw-w64-ucrt-x86_64-libjpeg-turbo
+            mingw-w64-ucrt-x86_64-libpng
+            mingw-w64-ucrt-x86_64-libspng
+            mingw-w64-ucrt-x86_64-libwebp
+            mingw-w64-ucrt-x86_64-libheif
+            mingw-w64-ucrt-x86_64-poppler
+            mingw-w64-ucrt-x86_64-hwloc
+            mingw-w64-ucrt-x86_64-orc
+
+      - name: Clone libvips
+        run: |
+          vips_version='${{ inputs.vips_version || '8.18.6' }}'
+          [ -n "$vips_version" ] || vips_version='8.18.6'
+          git clone --depth 1 --branch "v$vips_version" \
+            https://github.com/libvips/libvips.git vips-src
+
+      - name: Configure (locked slim flags)
+        run: |
+          # shellcheck disable=SC2046
+          meson setup build vips-src --prefix=/usr $(sh packaging/meson-slim.sh)
+
+      - name: Compile
+        run: ninja -C build
+
+      - name: Stage + repack include/ + lib/
+        run: |
+          rm -rf stage pkgroot
+          DESTDIR="$PWD/stage" ninja -C build install
+          mkdir -p pkgroot
+          cp -r stage/usr/include pkgroot/
+          cp -r stage/usr/lib pkgroot/
+          # Windows DLLs install to bin/ — ship alongside for runtime.
+          if [ -d stage/usr/bin ]; then
+            mkdir -p pkgroot/bin
+            cp stage/usr/bin/*.dll pkgroot/bin/ 2>/dev/null || true
+          fi
+          # macOS: relocatable id so consumers link via rpath, not /usr.
+          for lib in pkgroot/lib/libvips.42.dylib; do
+            [ -f "$lib" ] && install_name_tool -id "@rpath/$(basename "$lib")" "$lib" || true
+          done
+          du -sh pkgroot
+
+      - name: Tarball + checksum
+        run: |
+          tgz="vips-slim-${{ matrix.triple }}.tar.gz"
+          tar -czf "$tgz" -C pkgroot include lib $([ -d pkgroot/bin ] && echo bin)
+          sha256sum "$tgz" > "$tgz.sha256"
+          cat "$tgz.sha256"
+          ls -la "$tgz"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.triple }}
+          path: |
+            vips-slim-*.tar.gz
+            vips-slim-*.tar.gz.sha256
+
+  release:
+    name: attach to release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Merge SHA256SUMS + upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag || 'vips-slim-v1.0.0' }}
+        run: |
+          [ -n "$TAG" ] || TAG='vips-slim-v1.0.0'
+          cd assets
+          cat vips-slim-*.tar.gz.sha256 > SHA256SUMS
+          cat SHA256SUMS
+          # Verify every tarball against the merged sums before upload.
+          sha256sum -c SHA256SUMS
+          gh release upload "$TAG" --clobber vips-slim-*.tar.gz SHA256SUMS
