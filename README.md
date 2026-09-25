@@ -19,6 +19,10 @@ top. Throughput ≈ raw libvips; ergonomics ≈ Pillow one-liners.
 
 Prereqs: `libvips` (`pkg-config --exists vips`), the `zz` toolchain.
 
+The package keyword is `zimg` — add it, import it, nothing else:
+`zz add zimg`, then `import zimg`. `image` / `ops` are internal package
+modules (never imported by consumers); `vips` / `pillow` are never import names.
+
 ```bash
 zz registry add zimg --path /home/zaid/Projects/zimg   # once per machine
 zz add zimg          # resolves via the registry alias (or --path directly)

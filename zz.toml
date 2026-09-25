@@ -6,7 +6,7 @@ description = "Pillow-style imaging for ZZ, powered by libvips"
 license = "MIT"
 repository = "https://github.com/zz-language/zimg"
 category = "utilities"
-keywords = ["image", "vips", "pillow", "imaging"]
+keywords = ["zimg"]
 
 [native]
 build = "build.sh"
