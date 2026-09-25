@@ -1,6 +1,6 @@
 [package]
 name = "zimg"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["zaidejjo <zaidejjo@gmail.com>"]
 description = "Pillow-style imaging for ZZ, powered by libvips"
 license = "MIT"

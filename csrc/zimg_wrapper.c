@@ -13,6 +13,12 @@
 #include <string.h>
 #include <vips/vips.h>
 
+/* ── C-plugin ABI stamp ───────────────────────────────────────────── */
+/* Pure-C plugin marker for `zz` direct-dlsym loading (no Rust shim).
+ * Must equal `zz_runtime::c_abi::C_ABI_VERSION` (currently 1); a mismatch
+ * is a clean load refusal, never UB. Bump only with the marshaling contract. */
+const unsigned int ZZ_C_PLUGIN_ABI_VERSION = 1;
+
 /* ── Internal state ───────────────────────────────────────────────── */
 /* Concurrency contract (§3): every thread runs an independent pipeline.
  * The result slot, pending flag, and error buffer are thread-local, so

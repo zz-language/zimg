@@ -3,7 +3,9 @@
 #
 # Outputs to build/ directory:
 #   build/zimg_wrapper.o   — compiled C wrapper object file
-#   build/libzimg_native.so — compiled Rust native crate (shared library)
+#   build/libzimg.so       — pure-C shared library (VM dlopen, direct dlsym)
+#   build/libzimg_native.so — legacy Rust cdylib (transitional; ignored by
+#     C-ABI loaders, kept for old toolchains until native/ is deleted)
 #   build/libzimg_native.dylib — macOS variant
 #   build/cflags.txt       — pkg-config cflags
 #   build/ldflags.txt      — pkg-config libs
@@ -62,6 +64,20 @@ cc -c "$CSRC_DIR/zimg_wrapper.c" \
 	-Wall -Wextra -Werror -fPIC
 
 echo "Compiled: build/zimg_wrapper.o"
+
+# ── Pure-C shared library (VM dlopen target) ─────────────────────────
+#
+# Direct-dlsym loading needs the wrapper symbols exported from a plain C
+# shared object. The Rust cdylib below localizes them (--exclude-libs,ALL),
+# so it can never serve the C path: link the wrapper object + libvips
+# shared here. No cargo, no rustc.
+echo "Linking build/libzimg.so ..."
+# shellcheck disable=SC2086
+cc -shared -fPIC "$BUILD_DIR/zimg_wrapper.o" \
+	-o "$BUILD_DIR/libzimg.so" \
+	$LIBS
+
+echo "Compiled: build/libzimg.so"
 
 # ── Compile Rust native crate ───────────────────────────────────────
 #
