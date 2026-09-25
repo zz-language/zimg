@@ -16,12 +16,9 @@ any commercial or wide distribution.
 
 - **Dynamic linkage only.** The C wrapper compiles against libvips
   headers and links `-lvips` (shared). Verified:
-  - `ldd build/libzimg_native.so` → `libvips.so.42` (DT_NEEDED)
+  - `ldd build/libzimg.so` → `libvips.so.42` (DT_NEEDED)
   - consumer AOT binary → `libvips.so.42`, with 22 undefined `vips_*`
     references and **zero** defined ones (`nm -D`: `0 T vips_*`)
-  - `build/libzimg_native.a` contains only Rust codegen objects
-    (`ar t` shows no vips members); the 336KB AOT binary cannot
-    physically bundle libvips
 - No libvips headers are copied into this repo; no libvips source is
   vendored. End users must have a compatible libvips installed
   (system package or equivalent) for zimg binaries to run.

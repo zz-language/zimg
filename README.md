@@ -84,13 +84,13 @@ exit; a hello-world binary leaks 2 the same way). Zero leaked
 
 ## Toolchain pin
 
-`native/Cargo.toml` pins `zz_runtime` to `zaidejjo/zz` tag
-`tutorial/fnv-pin` (rustc 1.97.1, libvips 8.18.6 tested). Bump procedure:
-retarget the tag, run `./build.sh` (the `// Rustc:` stamp refreshes
-itself), then `cd tests/e2e && ./run_tests.sh` — a green 4/4 means the
-glue still matches `zz_runtime`'s `Value`/`EvalError` shapes. The
-previous rot ("match actual zz_runtime types") is exactly what this
-catches.
+No Rust involved: the hook is `cc` + `sh` only. The contract with `zz` is
+the `// C-ABI: 1` header in `plugin.zzi` plus the `ZZ_C_PLUGIN_ABI_VERSION`
+data symbol in `csrc/zimg_wrapper.c` — both must equal the toolchain's
+`zz_runtime::c_abi::C_ABI_VERSION` (currently 1); a mismatch is a clean
+load refusal. Compatibility check: `cd tests/e2e && ./run_tests.sh` —
+green 4/4 means VM (direct dlsym) and AOT agree. Tested against
+`zz` branch `feat/c-plugin-abi`, libvips 8.18.6.
 
 ## Roadmap
 
@@ -127,11 +127,10 @@ Differences to know:
 ## Layout
 
 ```
-plugin.zzi      raw FFI declarations (flat `zimg_*`, == C symbols)
+plugin.zzi      C-ABI declarations (flat `zimg_*`, == C symbols)
 zz.toml         [native] build hook
-build.sh        compiles csrc + Rust glue → build/*.o/.a/.so + ldflags
+build.sh        pure C: csrc → build/*.o/.so + ldflags (no cargo)
 csrc/           flat C wrapper over libvips (single result slot)
-native/         Rust cdylib/staticlib: VM registration + C decls
 src/zimg.zz     public entry: `zimg.resize/rotate/blur/live_handles`
 src/ops.zz      one-shot lifecycle (load → transform → save → close)
 src/image.zz    single-owner handle pipeline (the chaining primitives)
