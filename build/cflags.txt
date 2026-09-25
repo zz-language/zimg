@@ -1,1 +1,0 @@
--I/home/zaid/Projects/zimg/.slim-build/pkgroot/include -DZIMG_VIPS_HOME="/home/zaid/Projects/zimg/.slim-build/pkgroot" -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -pthread
