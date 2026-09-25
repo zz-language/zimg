@@ -99,10 +99,14 @@ into `~/.zz/cache/zimg-vips` (system `pkg-config vips` is the fallback;
 | Triple | Status | Tree | Tarball |
 |---|---|---|---|
 | `linux-x64` | built, e2e 4/4 green | 4.1 MB | 1.7 MB |
-| `linux-arm64` | pending (foreign runner) | — | — |
-| `darwin-x64` | pending (foreign runner) | — | — |
-| `darwin-arm64` | pending (foreign runner) | — | — |
-| `win-x64` | pending (foreign runner) | — | — |
+| `linux-arm64` | CI matrix (`slim-vips.yml`) | — | — |
+| `darwin-x64` | CI matrix (`slim-vips.yml`) | — | — |
+| `darwin-arm64` | CI matrix (`slim-vips.yml`) | — | — |
+| `win-x64` | CI matrix (`slim-vips.yml`) | — | — |
+
+Locked Meson flags live in `packaging/meson-slim.sh` (single source of
+truth for local + CI builds). CI attaches tarballs + merged `SHA256SUMS`
+to the `vips-slim-v<VERSION>` release (`--clobber` on re-runs).
 
 Slim cut (libvips 8.18.6): JPEG / PNG / WebP / HEIF-AVIF / PDF-load /
 GIF-load / EXIF in; TIFF, EXR, OpenSlide, FITS, MAT, JXL, J2K, SVG, RAW,
