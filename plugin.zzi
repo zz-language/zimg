@@ -1,6 +1,6 @@
 // Version: 1
 // C-ABI: 1
-// Plugin-version: 0.2.1
+// Plugin-version: 0.2.2
 
 // Raw FFI layer (internal). Consumers use the ergonomic `zimg.*` API
 // from src/zimg.zz instead: `import zimg` then `zimg.resize(...)`.
