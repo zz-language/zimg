@@ -17,7 +17,14 @@ top. Throughput ≈ raw libvips; ergonomics ≈ Pillow one-liners.
 
 ## Use
 
-Prereqs: `libvips` (`pkg-config --exists vips`), the `zz` toolchain.
+Prereqs: the `zz` toolchain. libvips resolves automatically:
+
+1. **Prebuilt slim** (`vips-slim-v1.0.0` GitHub Release tarballs, SHA-verified,
+   cached in `~/.zz/cache/zimg-vips`) — no install step.
+2. **System fallback** (`pkg-config --exists vips`, e.g. `apt install libvips-dev`).
+
+Overrides: `ZIMG_VIPS_DIR=<tree>` (local prebuilt tree),
+`ZIMG_VIPS_SYSTEM=1` (force system), `ZIMG_RELEASE_BASE=<url>` (mirror).
 
 The package keyword is `zimg` — add it, import it, nothing else:
 `zz add zimg`, then `import zimg`. `image` / `ops` are internal package
