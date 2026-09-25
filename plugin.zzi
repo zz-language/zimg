@@ -1,6 +1,6 @@
 // Version: 1
-// Rustc: 1.97.1
-// Plugin-version: 0.1.0
+// C-ABI: 1
+// Plugin-version: 0.2.0
 
 // Raw FFI layer (internal). Consumers use the ergonomic `zimg.*` API
 // from src/zimg.zz instead: `import zimg` then `zimg.resize(...)`.

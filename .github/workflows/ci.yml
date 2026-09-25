@@ -5,10 +5,10 @@ on:
   pull_request:
 
 env:
-  # Upstream toolchain source. Local dev overrides with ZZ=/path/to/zz
-  # (run_tests.sh honors $ZZ) and is usually ahead of this ref.
+  # Upstream toolchain source. Must carry the C-plugin ABI
+  # (zz_runtime::c_abi + C-ABI manifest support).
   ZZ_REPO: https://github.com/zaidejjo/zz
-  ZZ_REF: tutorial/fnv-pin
+  ZZ_REF: feat/c-plugin-abi
 
 jobs:
   e2e:
@@ -33,6 +33,14 @@ jobs:
       - name: Build native glue
         working-directory: zimg
         run: ./build.sh
+
+      - name: Prove glue has no Rust
+        working-directory: zimg
+        run: |
+          grep -q "^// C-ABI: 1" plugin.zzi
+          ! grep -q "^// Rustc:" plugin.zzi
+          ! grep -qw cargo build.sh
+          test ! -d native
 
       - name: Run e2e (VM + AOT)
         working-directory: zimg/tests/e2e

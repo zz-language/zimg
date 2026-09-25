@@ -233,8 +233,33 @@ func check_format_saves() {
     println("format_saves: PASS")
 }
 
-func check_watermark() {
-    base := fresh_copy("wbase")
+func check_rejects_bad_ranges() {
+    p := fresh_copy("badrange")
+    match zimg.save_jpeg(p, "/tmp/zimg-e2e-bad.jpg", 999) {
+        .ok(_) => fail("quality 999 should be rejected")
+        .err(_e) => println("quality rejected")
+    }
+    match zimg.save_png(p, "/tmp/zimg-e2e-bad.png", 10) {
+        .ok(_) => fail("compression 10 should be rejected")
+        .err(_e) => println("compression rejected")
+    }
+    match zimg.blur(p, -1.0) {
+        .ok(_) => fail("negative sigma should be rejected")
+        .err(_e) => println("sigma rejected")
+    }
+    match zimg.resize(p, 0, 64) {
+        .ok(_) => fail("zero width should be rejected")
+        .err(_e) => println("dims rejected")
+    }
+    match zimg.dims("/tmp/zimg-e2e-bad.bmp") {
+        .ok(_) => fail("bmp should be rejected")
+        .err(_e) => println("format rejected")
+    }
+    assert_eq(zimg.live_handles(), 0)
+    println("reject_ranges: PASS")
+}
+
+func check_watermark() {    base := fresh_copy("wbase")
     mark := fresh_copy("wmark")
     expect_ok(zimg.watermark(base, mark, "over", 4, 4), "watermark")
     match zimg.watermark(base, mark, "bogus", 0, 0) {
@@ -264,6 +289,7 @@ func main() {
     check_resize_kernel()
     check_format_saves()
     check_watermark()
+    check_rejects_bad_ranges()
     assert_eq(zimg.live_handles(), 0)
     println("ALL_PASS")
 }

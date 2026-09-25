@@ -61,10 +61,61 @@ func saved(h2: int, path: str) -> Result<str, str> {
 /// Resize the image at `path`, saving back to the same path.
 /// Returns the path on success.
 
+/// Early range validation (mirrors the C walls): reject before FFI so
+/// callers get `.err` without a native round-trip. NaN fails `>=` and is
+/// rejected too.
+
+func check_sigma(sigma: float) -> Result<float, str> {
+    if sigma >= 0.0 {
+        .ok(sigma)
+    } else {
+        .err("zimg: sigma must be non-negative")
+    }
+}
+
+func check_quality(q: int) -> Result<int, str> {
+    if q >= 0 {
+        if q <= 100 {
+            .ok(q)
+        } else {
+            .err("zimg: quality must be 0-100")
+        }
+    } else {
+        .err("zimg: quality must be 0-100")
+    }
+}
+
+func check_compression(c: int) -> Result<int, str> {
+    if c >= 0 {
+        if c <= 9 {
+            .ok(c)
+        } else {
+            .err("zimg: compression must be 0-9")
+        }
+    } else {
+        .err("zimg: compression must be 0-9")
+    }
+}
+
+func check_dims(width: int, height: int) -> Result<int, str> {
+    if width > 0 {
+        if height > 0 {
+            .ok(0)
+        } else {
+            .err("zimg: dimensions must be positive")
+        }
+    } else {
+        .err("zimg: dimensions must be positive")
+    }
+}
+
 pub func resize(path: str, width: int, height: int) -> Result<str, str> {
-    match image.load(path) {
+    match check_dims(width, height) {
         .err(e) => .err(e)
-        .ok(h) => resized(h, fit_scale(image.width_of(h), image.height_of(h), width, height), path)
+        .ok(_c) => match image.load(path) {
+            .err(e) => .err(e)
+            .ok(h) => resized(h, fit_scale(image.width_of(h), image.height_of(h), width, height), path)
+        }
     }
 }
 
@@ -85,9 +136,12 @@ pub func rotate(path: str, degrees: int) -> Result<str, str> {
 /// Returns the path on success.
 
 pub func blur(path: str, sigma: float) -> Result<str, str> {
-    match image.load(path) {
+    match check_sigma(sigma) {
         .err(e) => .err(e)
-        .ok(h) => blurred(h, sigma, path)
+        .ok(s) => match image.load(path) {
+            .err(e) => .err(e)
+            .ok(h) => blurred(h, s, path)
+        }
     }
 }
 
@@ -95,13 +149,16 @@ pub func blur(path: str, sigma: float) -> Result<str, str> {
 /// back. crop_mode: "none" fits, "centre" fills exactly.
 
 pub func thumbnail(path: str, width: int, height: int, crop_mode: str) -> Result<str, str> {
-    match image.crop_mode_named(crop_mode) {
+    match check_dims(width, height) {
         .err(e) => .err(e)
-        .ok(cm) => match image.load(path) {
+        .ok(_c) => match image.crop_mode_named(crop_mode) {
             .err(e) => .err(e)
-            .ok(h) => match image.thumbnail_to(h, width, height, cm) {
+            .ok(cm) => match image.load(path) {
                 .err(e) => .err(e)
-                .ok(h2) => saved(h2, path)
+                .ok(h) => match image.thumbnail_to(h, width, height, cm) {
+                    .err(e) => .err(e)
+                    .ok(h2) => saved(h2, path)
+                }
             }
         }
     }
@@ -160,11 +217,14 @@ pub func bright_contrast(path: str, brightness: float, contrast: float) -> Resul
 /// Sharpen the image at `path` (sigma), saving back.
 
 pub func sharpen(path: str, sigma: float) -> Result<str, str> {
-    match image.load(path) {
+    match check_sigma(sigma) {
         .err(e) => .err(e)
-        .ok(h) => match image.sharpen_by(h, sigma) {
+        .ok(s) => match image.load(path) {
             .err(e) => .err(e)
-            .ok(h2) => saved(h2, path)
+            .ok(h) => match image.sharpen_by(h, s) {
+                .err(e) => .err(e)
+                .ok(h2) => saved(h2, path)
+            }
         }
     }
 }
@@ -227,11 +287,14 @@ pub func flip(path: str, direction: str) -> Result<str, str> {
 /// Crop the image at `path` to (left, top, width, height), saving back.
 
 pub func crop(path: str, left: int, top: int, width: int, height: int) -> Result<str, str> {
-    match image.load(path) {
+    match check_dims(width, height) {
         .err(e) => .err(e)
-        .ok(h) => match image.crop_to(h, left, top, width, height) {
+        .ok(_c) => match image.load(path) {
             .err(e) => .err(e)
-            .ok(h2) => saved(h2, path)
+            .ok(h) => match image.crop_to(h, left, top, width, height) {
+                .err(e) => .err(e)
+                .ok(h2) => saved(h2, path)
+            }
         }
     }
 }
@@ -256,13 +319,16 @@ pub func to_colorspace(path: str, name: str) -> Result<str, str> {
 /// ("nearest", "linear", "cubic", "mitchell", "lanczos2", "lanczos3").
 
 pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Result<str, str> {
-    match image.kernel_named(kernel) {
+    match check_dims(width, height) {
         .err(e) => .err(e)
-        .ok(k) => match image.load(path) {
+        .ok(_c) => match image.kernel_named(kernel) {
             .err(e) => .err(e)
-            .ok(h) => match image.resize_kernel_to(h, fit_scale(image.width_of(h), image.height_of(h), width, height), k) {
+            .ok(k) => match image.load(path) {
                 .err(e) => .err(e)
-                .ok(h2) => saved(h2, path)
+                .ok(h) => match image.resize_kernel_to(h, fit_scale(image.width_of(h), image.height_of(h), width, height), k) {
+                    .err(e) => .err(e)
+                    .ok(h2) => saved(h2, path)
+                }
             }
         }
     }
@@ -270,48 +336,57 @@ pub func resize_kernel(path: str, width: int, height: int, kernel: str) -> Resul
 /// Save a copy in another format with a quality setting.
 
 pub func save_jpeg(path: str, out: str, quality: int) -> Result<str, str> {
-    match image.load(path) {
+    match check_quality(quality) {
         .err(e) => .err(e)
-        .ok(h) => match image.save_jpeg_to(h, out, quality) {
-            .err(e) => {
-                image.close(h)
-                .err(e)
-            }
-            .ok(p) => {
-                image.close(h)
-                .ok(p)
+        .ok(q) => match image.load(path) {
+            .err(e) => .err(e)
+            .ok(h) => match image.save_jpeg_to(h, out, q) {
+                .err(e) => {
+                    image.close(h)
+                    .err(e)
+                }
+                .ok(p) => {
+                    image.close(h)
+                    .ok(p)
+                }
             }
         }
     }
 }
 
 pub func save_png(path: str, out: str, compression: int) -> Result<str, str> {
-    match image.load(path) {
+    match check_compression(compression) {
         .err(e) => .err(e)
-        .ok(h) => match image.save_png_to(h, out, compression) {
-            .err(e) => {
-                image.close(h)
-                .err(e)
-            }
-            .ok(p) => {
-                image.close(h)
-                .ok(p)
+        .ok(c) => match image.load(path) {
+            .err(e) => .err(e)
+            .ok(h) => match image.save_png_to(h, out, c) {
+                .err(e) => {
+                    image.close(h)
+                    .err(e)
+                }
+                .ok(p) => {
+                    image.close(h)
+                    .ok(p)
+                }
             }
         }
     }
 }
 
 pub func save_webp(path: str, out: str, quality: int) -> Result<str, str> {
-    match image.load(path) {
+    match check_quality(quality) {
         .err(e) => .err(e)
-        .ok(h) => match image.save_webp_to(h, out, quality) {
-            .err(e) => {
-                image.close(h)
-                .err(e)
-            }
-            .ok(p) => {
-                image.close(h)
-                .ok(p)
+        .ok(q) => match image.load(path) {
+            .err(e) => .err(e)
+            .ok(h) => match image.save_webp_to(h, out, q) {
+                .err(e) => {
+                    image.close(h)
+                    .err(e)
+                }
+                .ok(p) => {
+                    image.close(h)
+                    .ok(p)
+                }
             }
         }
     }

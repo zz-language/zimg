@@ -13,6 +13,12 @@
 #include <string.h>
 #include <vips/vips.h>
 
+/* ── C-plugin ABI stamp ───────────────────────────────────────────── */
+/* Pure-C plugin marker for `zz` direct-dlsym loading (no Rust shim).
+ * Must equal `zz_runtime::c_abi::C_ABI_VERSION` (currently 1); a mismatch
+ * is a clean load refusal, never UB. Bump only with the marshaling contract. */
+const unsigned int ZZ_C_PLUGIN_ABI_VERSION = 1;
+
 /* ── Internal state ───────────────────────────────────────────────── */
 /* Concurrency contract (§3): every thread runs an independent pipeline.
  * The result slot, pending flag, and error buffer are thread-local, so
@@ -82,6 +88,38 @@ static void _set_error(const char* msg) {
 }
 
 static void _clear_error(void) { _last_error[0] = '\0'; }
+
+/* ── Slim format surface ──────────────────────────────────────────── */
+/* Supported formats: PNG JPG WebP GIF HEIF AVIF PDF (load); PDF is
+ * load-only (libvips has no PDF saver). Everything else (TIFF, OpenEXR,
+ * FITS, MAT, SVG, …) is rejected here with a clear error instead of a
+ * deep libvips failure. Case-insensitive. */
+
+static int _ext_matches(const char* path, const char* const* exts) {
+    const char* dot = strrchr(path, '.');
+    if (!dot || !dot[1]) return 0;
+    for (int i = 0; exts[i]; i++) {
+        const char* a = dot + 1;
+        const char* b = exts[i];
+        for (;;) {
+            char ca = *a;
+            if (ca >= 'A' && ca <= 'Z') ca += 32;
+            if (ca != *b) break;
+            if (ca == '\0') return 1;
+            a++;
+            b++;
+        }
+    }
+    return 0;
+}
+
+static const char* const _load_exts[] = {
+    "png", "jpg", "jpeg", "webp", "gif", "heif", "heic", "avif", "pdf", NULL
+};
+
+static const char* const _save_exts[] = {
+    "png", "jpg", "jpeg", "webp", "gif", "heif", "heic", "avif", NULL
+};
 
 /* ── Result slot ──────────────────────────────────────────────────── */
 /* Stores the VipsImage* produced by the last image-producing call.   */
@@ -156,6 +194,10 @@ void zimg_set_concurrency(int n) { vips_concurrency_set(n); }
 int zimg_load(const char* path) {
     _clear_error();
     if (!path || !path[0]) { _set_error("empty path"); return -1; }
+    if (!_ext_matches(path, _load_exts)) {
+        _set_error("unsupported format (want png/jpg/webp/gif/heif/avif/pdf)");
+        return -1;
+    }
     VipsImage* vips = vips_image_new_from_file(path, NULL);
     if (!vips) {
         _set_error(vips_error_buffer());
@@ -200,6 +242,10 @@ int zimg_save(void* img, const char* path) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
     if (!path || !path[0]) { _set_error("empty path"); return -1; }
+    if (!_ext_matches(path, _save_exts)) {
+        _set_error("unsupported save format (want png/jpg/webp/gif/heif/avif)");
+        return -1;
+    }
     if (vips_image_write_to_file((VipsImage*)img, path, NULL)) {
         _set_error(vips_error_buffer());
         vips_error_clear();
@@ -211,6 +257,7 @@ int zimg_save(void* img, const char* path) {
 int zimg_resize(void* img, double scale) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
+    if (!(scale > 0.0)) { _set_error("scale must be positive"); return -1; }
     VipsImage* out = NULL;
     if (vips_resize((VipsImage*)img, &out, scale, NULL)) {
         _set_error(vips_error_buffer());
@@ -224,6 +271,7 @@ int zimg_resize(void* img, double scale) {
 int zimg_blur(void* img, double sigma) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
+    if (!(sigma >= 0.0)) { _set_error("sigma must be non-negative"); return -1; }
     VipsImage* out = NULL;
     if (vips_gaussblur((VipsImage*)img, &out, sigma, NULL)) {
         _set_error(vips_error_buffer());
@@ -278,6 +326,7 @@ int zimg_flip(void* img, int direction) {
 int zimg_resize_kernel(void* img, double scale, int kernel) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
+    if (!(scale > 0.0)) { _set_error("scale must be positive"); return -1; }
     if (kernel < 0 || kernel >= VIPS_KERNEL_LAST) {
         _set_error("unknown resampling kernel");
         return -1;
@@ -405,6 +454,7 @@ int zimg_to_colorspace(void* img, int cs) {
 int zimg_sharpen(void* img, double sigma) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
+    if (!(sigma >= 0.0)) { _set_error("sigma must be non-negative"); return -1; }
     /* Sharpen routes through Lab internally and rejects untagged input:
      * ensure sRGB first (noop when already sRGB). The temp is unref'd
      * directly — never slot-tracked, never counted. */
@@ -471,6 +521,7 @@ int zimg_save_jpeg(void* img, const char* path, int quality) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
     if (!path || !path[0]) { _set_error("empty path"); return -1; }
+    if (quality < 0 || quality > 100) { _set_error("quality must be 0-100"); return -1; }
     if (vips_jpegsave((VipsImage*)img, path, "Q", quality, NULL)) {
         _set_error(vips_error_buffer());
         vips_error_clear();
@@ -483,6 +534,7 @@ int zimg_save_png(void* img, const char* path, int compression) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
     if (!path || !path[0]) { _set_error("empty path"); return -1; }
+    if (compression < 0 || compression > 9) { _set_error("compression must be 0-9"); return -1; }
     if (vips_pngsave((VipsImage*)img, path, "compression", compression, NULL)) {
         _set_error(vips_error_buffer());
         vips_error_clear();
@@ -495,6 +547,7 @@ int zimg_save_webp(void* img, const char* path, int quality) {
     _clear_error();
     if (!img) { _set_error("null image"); return -1; }
     if (!path || !path[0]) { _set_error("empty path"); return -1; }
+    if (quality < 0 || quality > 100) { _set_error("quality must be 0-100"); return -1; }
     if (vips_webpsave((VipsImage*)img, path, "Q", quality, NULL)) {
         _set_error(vips_error_buffer());
         vips_error_clear();
