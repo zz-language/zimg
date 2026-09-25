@@ -89,6 +89,28 @@ exit; a hello-world binary leaks 2 the same way). Zero leaked
   build-hook (`../../build.sh` not found); `tests/e2e/zz.toml` uses an
   absolute path until hook resolution is fixed upstream.
 
+## Prebuilt slim libvips
+
+`build.sh` fetches SHA-verified slim trees from the
+[`vips-slim-v1.0.0` release](https://github.com/zz-language/zimg/releases/tag/vips-slim-v1.0.0)
+into `~/.zz/cache/zimg-vips` (system `pkg-config vips` is the fallback;
+`ZIMG_VIPS_DIR` / `ZIMG_VIPS_SYSTEM=1` override).
+
+| Triple | Status | Tree | Tarball |
+|---|---|---|---|
+| `linux-x64` | built, e2e 4/4 green | 4.1 MB | 1.7 MB |
+| `linux-arm64` | pending (foreign runner) | — | — |
+| `darwin-x64` | pending (foreign runner) | — | — |
+| `darwin-arm64` | pending (foreign runner) | — | — |
+| `win-x64` | pending (foreign runner) | — | — |
+
+Slim cut (libvips 8.18.6): JPEG / PNG / WebP / HEIF-AVIF / PDF-load /
+GIF-load / EXIF in; TIFF, EXR, OpenSlide, FITS, MAT, JXL, J2K, SVG, RAW,
+Magick, LCMS, FFTW, pangocairo, introspection out. Deviations in v1:
+PNG via libpng (not spng), GIF load-only (needs imagequant/quantizr);
+glib/gobject stay system. The wrapper pins `VIPSHOME` to the tree at
+runtime — system modules are never probed (two libvips = deadlock).
+
 ## Toolchain pin
 
 No Rust involved: the hook is `cc` + `sh` only. The contract with `zz` is
