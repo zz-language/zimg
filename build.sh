@@ -117,19 +117,29 @@ fetch_prebuilt() {
 	return 1
 }
 
-if [ -n "$ZIMG_VIPS_DIR" ]; then
-	# shellcheck disable=SC2086
-	CFLAGS="-I$ZIMG_VIPS_DIR/include $(pkg-config --cflags glib-2.0 gobject-2.0 2>/dev/null || true)"
-	LIBS="-L$ZIMG_VIPS_DIR/lib -lvips"
-elif [ "$ZIMG_VIPS_SYSTEM" != "1" ] && _triple="$(detect_triple)" && _dir="$(fetch_prebuilt "$_triple")"; then
-	echo "zimg: using prebuilt slim libvips $ZIMG_VIPS_VERSION ($_triple)" >&2
+# Flags for a prebuilt tree in $1 (slim tarballs ship libvips only;
+# glib/gobject stay system). Sets CFLAGS/LIBS globals. Adds a runtime
+# search path so the prebuilt lib wins over any system one.
+set_prebuilt_flags() {
+	_dir="$1"
 	case "$(uname -s)" in
 	MINGW* | MSYS* | CYGWIN*) _rpath="" ;;
 	*) _rpath="-Wl,-rpath,$_dir/lib" ;;
 	esac
+	# ZIMG_VIPS_HOME bakes the tree path into the wrapper so VIPSHOME
+	# points at it at runtime (module probing stays inside the slim
+	# tree — never the system module dir).
 	# shellcheck disable=SC2086
-	CFLAGS="-I$_dir/include $(pkg-config --cflags glib-2.0 gobject-2.0 2>/dev/null || true)"
-	LIBS="-L$_dir/lib -lvips $_rpath"
+	CFLAGS="-I$_dir/include -DZIMG_VIPS_HOME=\"$_dir\" $(pkg-config --cflags glib-2.0 gobject-2.0 2>/dev/null || true)"
+	# shellcheck disable=SC2086
+	LIBS="-L$_dir/lib -lvips $(pkg-config --libs glib-2.0 gobject-2.0 2>/dev/null || true) $_rpath"
+}
+
+if [ -n "$ZIMG_VIPS_DIR" ]; then
+	set_prebuilt_flags "$ZIMG_VIPS_DIR"
+elif [ "$ZIMG_VIPS_SYSTEM" != "1" ] && _triple="$(detect_triple)" && _dir="$(fetch_prebuilt "$_triple")"; then
+	echo "zimg: using prebuilt slim libvips $ZIMG_VIPS_VERSION ($_triple)" >&2
+	set_prebuilt_flags "$_dir"
 else
 	if [ "$ZIMG_VIPS_SYSTEM" != "1" ]; then
 		echo "zimg: no prebuilt libvips (offline or unpublished) — system fallback" >&2

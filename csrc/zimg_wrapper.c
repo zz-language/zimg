@@ -167,6 +167,16 @@ static pthread_once_t _init_once = PTHREAD_ONCE_INIT;
 static int _init_rc = 0;
 
 static void _do_init(void) {
+#ifdef ZIMG_VIPS_HOME
+    /* Prebuilt slim tree (baked in by build.sh as -DZIMG_VIPS_HOME):
+     * pin module probing to it. Without this, libvips falls back to
+     * the configure-time system module dir; system modules link the
+     * system libvips, and two libvips in one process corrupt GType
+     * and deadlock. Explicit VIPSHOME always wins. */
+    if (!getenv("VIPSHOME")) {
+        setenv("VIPSHOME", ZIMG_VIPS_HOME, 0);
+    }
+#endif
     /* Install before VIPS_INIT: module probing happens during init. */
     g_log_set_handler("VIPS", G_LOG_LEVEL_WARNING | G_LOG_LEVEL_MESSAGE, _vips_log_filter, NULL);
     if (VIPS_INIT("zimg")) {

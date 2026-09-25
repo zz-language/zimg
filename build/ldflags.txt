@@ -1,1 +1,1 @@
--lvips -lgio-2.0 -lgobject-2.0 -lglib-2.0
+-L/home/zaid/Projects/zimg/.slim-build/pkgroot/lib -lvips -lgobject-2.0 -lglib-2.0 -Wl,-rpath,/home/zaid/Projects/zimg/.slim-build/pkgroot/lib

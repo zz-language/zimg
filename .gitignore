@@ -1,5 +1,6 @@
 native/target/
 build/
+.slim-build/
 
 .opencode/mynotes/
 
