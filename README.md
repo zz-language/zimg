@@ -77,17 +77,12 @@ exit; a hello-world binary leaks 2 the same way). Zero leaked
 
 ## Known toolchain gaps (upstream zz, not zimg bugs)
 
-- `zz test` type-checks plugin imports but never dlopens `build/*.so`,
-  so native calls fail at runtime — the suite uses `zz run` programs
-  instead of `@test` functions until that lands.
-- VM frame-slot bug (`runtime.rs:488` OOB / corrupt locals): several
-  live `[int]` locals beside `match` statements, `assert(a && b)`, or
-  two-subscript call args can panic. Workaround used throughout the
-  suite: `dim_w`/`dim_h` int helpers, one comparison per `assert`,
-  calls extracted to locals before asserting.
-- Relative `[dependencies.zimg] path = "../.."` breaks the AOT
-  build-hook (`../../build.sh` not found); `tests/e2e/zz.toml` uses an
-  absolute path until hook resolution is fixed upstream.
+- `zz test` now dlopens `build/*.so` (fixed upstream), but the suite
+  keeps its `zz run` programs: they assert end-to-end behavior including
+  file I/O and exit codes, which `@test` functions don't cover.
+- Historical workarounds kept in the suite (`dim_w`/`dim_h` int helpers,
+  one comparison per `assert`): the VM frame-slot bug behind them is
+  fixed upstream; the helpers stay as style, not necessity.
 
 ## Prebuilt slim libvips
 

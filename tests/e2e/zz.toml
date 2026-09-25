@@ -3,4 +3,4 @@ name = "zimg-e2e"
 version = "0.1.0"
 
 [dependencies.zimg]
-path = "/home/zaid/Projects/zimg"
+path = "../.."
