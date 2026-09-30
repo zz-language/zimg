@@ -1,6 +1,6 @@
 [package]
 name = "zimg"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["zaidejjo <zaidejjo@gmail.com>"]
 description = "Pillow-style imaging for ZZ, powered by libvips"
 license = "MIT"
@@ -9,4 +9,14 @@ category = "utilities"
 keywords = ["zimg"]
 
 [native]
-build = "build.sh"
+backend = "cc"
+manifest = "plugin.zzi"
+
+[native.build-cc]
+sources = ["csrc/zimg_wrapper.c"]
+include_dirs = ["csrc"]
+defines = ["NDEBUG"]
+cflags = ["-O2", "-Wall", "-Wextra", "-fPIC"]
+libs = []
+pkg_config = ["vips"]
+targets = ["linux-x86_64-gnu-glibc2.28", "linux-x86_64-musl", "macos-arm64-min11.0", "macos-x86_64-min12.0"]

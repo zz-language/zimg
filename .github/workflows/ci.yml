@@ -30,16 +30,20 @@ jobs:
           cargo install --path zz_lang/crates/zz_cli --root "$HOME/.zz-bin"
           echo "$HOME/.zz-bin/bin" >> "$GITHUB_PATH"
 
-      - name: Build native glue
-        working-directory: zimg
-        run: ./build.sh
+      - name: Build native glue (declarative, no scripts)
+        working-directory: zimg/tests/e2e
+        run: |
+          zz install
+          test -f ../../build/zimg_wrapper.o
+          test -f ../../build/libzimg.a
+          test -f ../../build/libzimg.so
+          grep -q 'backend = "cc"' ../../zz.toml
 
       - name: Prove glue has no Rust
         working-directory: zimg
         run: |
           grep -q "^// C-ABI: 1" plugin.zzi
           ! grep -q "^// Rustc:" plugin.zzi
-          ! grep -qw cargo build.sh
           test ! -d native
 
       - name: Run e2e (VM + AOT)

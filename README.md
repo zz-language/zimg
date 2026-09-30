@@ -84,6 +84,21 @@ exit; a hello-world binary leaks 2 the same way). Zero leaked
   one comparison per `assert`): the VM frame-slot bug behind them is
   fixed upstream; the helpers stay as style, not necessity.
 
+## Native build (declarative)
+
+`zz` compiles `csrc/` itself from `[native.build-cc]` in `zz.toml`
+(system libvips via `pkg-config vips`, verified for both engines at
+build time). Consumers need nothing beyond `zz install` — direct
+dependencies source-build with a warning; transitive consumers of this
+source-only release pass `zz install --allow-source-builds` until
+per-tag prebuilts ship (see below).
+
+`build.sh` is retained for slim-tree/offline environments
+(`ZIMG_VIPS_DIR`, no system libvips) and old toolchains: it fetches the
+SHA-verified slim trees below and bakes `-DZIMG_VIPS_HOME`. The
+declarative path never bakes absolute paths — without the define the
+wrapper uses the standard libvips both engines link.
+
 ## Prebuilt slim libvips
 
 `build.sh` fetches SHA-verified slim trees from the
@@ -156,8 +171,9 @@ Differences to know:
 
 ```
 plugin.zzi      C-ABI declarations (flat `zimg_*`, == C symbols)
-zz.toml         [native] build hook
-build.sh        pure C: csrc → build/*.o/.so + ldflags (no cargo)
+zz.toml         [native.build-cc] declarative manifest (no scripts)
+build.sh        slim-tree/offline build only (ZIMG_VIPS_DIR, no system vips)
+csrc/           flat C wrapper over libvips (single result slot)
 csrc/           flat C wrapper over libvips (single result slot)
 src/zimg.zz     public entry: `zimg.resize/rotate/blur/live_handles`
 src/ops.zz      one-shot lifecycle (load → transform → save → close)
